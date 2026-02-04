@@ -38,6 +38,30 @@ A Chrome extension that generates parametric CAD models in Onshape using natural
 
 ## Quick Start
 
+### Commands to run (copy-paste)
+
+**Terminal 1 – backend:**
+```bash
+cd backend
+npm install
+cp .env.example .env
+# Edit .env and add GROQ_API_KEY
+npm run dev
+```
+
+**Terminal 2 – extension (build once):**
+```bash
+cd extension
+npm install
+npm run build
+```
+
+**Chrome:** `chrome://extensions/` → Developer mode → Load unpacked → select `extension/dist`.
+
+**Use:** Open https://cad.onshape.com (a document), open the COCAD sidebar, describe your part, and run the flow.
+
+---
+
 ### Prerequisites
 
 - Node.js 18+
