@@ -22,6 +22,11 @@ export interface Feature {
   purpose: string;
 }
 
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export type UIAction =
   | { type: 'CLICK_BUTTON'; button: string }
   | { type: 'SELECT_PLANE'; plane: 'Front' | 'Top' | 'Right' }
@@ -30,6 +35,14 @@ export type UIAction =
   | { type: 'DRAW_CIRCLE'; cx: number; cy: number; radius: number }
   | { type: 'SET_DIMENSION'; value: string }
   | { type: 'FILL_INPUT'; field: string; value: string }
+  | { type: 'FOCUS_INPUT'; selector: string }
+  | { type: 'TYPE_VALUE'; value: string }
+  | { type: 'PRESS_KEY'; key: 'Enter' | 'Tab' | 'Escape' }
+  | { type: 'SELECT_FACE'; selector: string }
+  | { type: 'SELECT_EDGE'; selector: string }
+  | { type: 'CREATE_HOLE'; diameter: string; depth: string }
+  | { type: 'CREATE_FILLET'; radius: string }
+  | { type: 'CREATE_CHAMFER'; distance: string }
   | { type: 'CLICK_OK' }
   | { type: 'CLICK_CANCEL' }
   | { type: 'FINISH_SKETCH' }

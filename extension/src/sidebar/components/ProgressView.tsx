@@ -4,6 +4,8 @@ import type { UIAction, ExecutionState } from '../../types/actions';
 interface ProgressViewProps {
   actions: UIAction[];
   executionState: ExecutionState;
+  onPause?: () => void;
+  onResume?: () => void;
 }
 
 // Map action types to human-readable descriptions
@@ -75,32 +77,48 @@ const getActionIcon = (action: UIAction): React.ReactNode => {
   }
 };
 
-export const ProgressView: React.FC<ProgressViewProps> = ({ actions, executionState }) => {
-  const { currentAction, totalActions, isRunning } = executionState;
+export const ProgressView: React.FC<ProgressViewProps> = ({ actions, executionState, onPause, onResume }) => {
+  const { currentAction, totalActions, isRunning, isPaused } = executionState;
   const progress = totalActions > 0 ? ((currentAction + 1) / totalActions) * 100 : 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-lg font-medium text-white">Generating Model</h2>
-        {isRunning && (
-          <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded-full animate-pulse">
-            Running
-          </span>
-        )}
+        <h2 className="text-sm font-medium text-onshape-text">Generating model</h2>
+        <div className="flex items-center gap-2">
+          {isRunning && !isPaused && (
+            <span className="text-[11px] px-2 py-0.5 bg-onshape-bg-elevated border border-onshape-accent/50 text-onshape-accent rounded animate-pulse">
+              Running
+            </span>
+          )}
+          {isPaused && (
+            <span className="text-[11px] px-2 py-0.5 bg-onshape-bg-elevated border border-onshape-border text-onshape-text-muted rounded">
+              Paused
+            </span>
+          )}
+          {isRunning && (
+            <button
+              type="button"
+              onClick={isPaused ? onResume : onPause}
+              className="text-[11px] px-2 py-0.5 bg-onshape-bg-elevated border border-onshape-border text-onshape-text rounded hover:bg-onshape-hover transition-colors"
+            >
+              {isPaused ? 'Resume' : 'Pause'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Progress Bar */}
-      <div className="bg-gray-800 rounded-lg p-4">
-        <div className="flex items-center justify-between text-sm mb-2">
-          <span className="text-gray-400">Progress</span>
-          <span className="text-white">
+      <div className="bg-onshape-bg-elevated border border-onshape-border rounded p-3">
+        <div className="flex items-center justify-between text-xs mb-1.5">
+          <span className="text-onshape-text-muted">Progress</span>
+          <span className="text-onshape-text font-medium">
             {currentAction + 1} / {totalActions}
           </span>
         </div>
-        <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+        <div className="w-full h-1.5 bg-onshape-bg overflow-hidden rounded-full">
           <div
-            className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
+            className="h-full bg-onshape-accent transition-all duration-300 rounded-full"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -108,70 +126,62 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ actions, executionSt
 
       {/* Current Action */}
       {actions[currentAction] && (
-        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
+        <div className="bg-onshape-bg-elevated border border-onshape-accent/40 rounded p-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded bg-onshape-accent/20 flex items-center justify-center text-onshape-accent shrink-0">
               {getActionIcon(actions[currentAction])}
             </div>
-            <div>
-              <p className="text-white font-medium">
+            <div className="min-w-0">
+              <p className="text-onshape-text text-sm font-medium truncate">
                 {getActionDescription(actions[currentAction])}
               </p>
-              <p className="text-blue-400 text-sm">In progress...</p>
+              <p className="text-onshape-text-muted text-xs">In progress…</p>
             </div>
           </div>
         </div>
       )}
 
       {/* Action List */}
-      <div className="bg-gray-800 rounded-lg p-4 max-h-64 overflow-y-auto">
-        <h3 className="text-sm font-medium text-gray-400 mb-3">Action Sequence</h3>
-        <div className="space-y-2">
+      <div className="bg-onshape-bg-elevated border border-onshape-border rounded p-3 max-h-52 overflow-y-auto">
+        <h3 className="text-xs font-medium text-onshape-text-muted uppercase tracking-wide mb-2">Action sequence</h3>
+        <div className="space-y-1">
           {actions.map((action, index) => {
             const isComplete = index < currentAction;
             const isCurrent = index === currentAction;
-            const isPending = index > currentAction;
 
             return (
               <div
                 key={index}
-                className={`flex items-center gap-3 py-2 px-3 rounded-lg transition-colors ${
+                className={`flex items-center gap-2 py-1.5 px-2 rounded transition-colors ${
                   isCurrent
-                    ? 'bg-blue-500/20 border border-blue-500/30'
+                    ? 'bg-onshape-bg border border-onshape-accent/40'
                     : isComplete
-                    ? 'bg-green-500/10'
-                    : 'bg-gray-900'
+                    ? 'bg-onshape-bg border border-onshape-border opacity-80'
+                    : 'bg-onshape-bg border border-transparent opacity-60'
                 }`}
               >
-                {/* Status Icon */}
                 <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                  className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
                     isComplete
-                      ? 'bg-green-500'
+                      ? 'bg-onshape-accent text-white'
                       : isCurrent
-                      ? 'bg-blue-500 animate-pulse'
-                      : 'bg-gray-700'
+                      ? 'bg-onshape-accent animate-pulse text-white'
+                      : 'bg-onshape-bg-input text-onshape-text-muted'
                   }`}
                 >
                   {isComplete ? (
-                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                   ) : isCurrent ? (
-                    <div className="w-2 h-2 bg-white rounded-full" />
+                    <div className="w-1.5 h-1.5 bg-white rounded-full" />
                   ) : (
-                    <span className="text-gray-500 text-xs">{index + 1}</span>
+                    <span className="text-[10px] font-medium">{index + 1}</span>
                   )}
                 </div>
-
-                {/* Action Description */}
                 <span
-                  className={`text-sm ${
-                    isComplete
-                      ? 'text-green-400'
-                      : isCurrent
-                      ? 'text-white'
-                      : 'text-gray-500'
+                  className={`text-xs truncate ${
+                    isComplete ? 'text-onshape-text-muted' : isCurrent ? 'text-onshape-text' : 'text-onshape-text-muted'
                   }`}
                 >
                   {getActionDescription(action)}

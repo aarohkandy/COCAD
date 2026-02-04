@@ -9,42 +9,42 @@ interface PlanningViewProps {
 
 export const PlanningView: React.FC<PlanningViewProps> = ({ plan, onApprove, onEdit }) => {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-lg font-medium text-white">Review Plan</h2>
-        <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-400 rounded-full">
+        <h2 className="text-sm font-medium text-onshape-text">Review plan</h2>
+        <span className="text-[11px] px-2 py-0.5 bg-onshape-bg-elevated border border-onshape-border rounded text-onshape-text-muted">
           Ready to generate
         </span>
       </div>
 
       {/* Design Intent */}
-      <section className="bg-gray-800 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-gray-400 mb-2">Design Intent</h3>
-        <p className="text-white">{plan.designIntent}</p>
+      <section className="bg-onshape-bg-elevated border border-onshape-border rounded p-3">
+        <h3 className="text-xs font-medium text-onshape-text-muted uppercase tracking-wide mb-1.5">Design intent</h3>
+        <p className="text-onshape-text text-sm">{plan.designIntent}</p>
       </section>
 
       {/* Overall Form */}
-      <section className="bg-gray-800 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-gray-400 mb-2">Overall Form</h3>
-        <p className="text-white">{plan.overallForm}</p>
+      <section className="bg-onshape-bg-elevated border border-onshape-border rounded p-3">
+        <h3 className="text-xs font-medium text-onshape-text-muted uppercase tracking-wide mb-1.5">Overall form</h3>
+        <p className="text-onshape-text text-sm">{plan.overallForm}</p>
       </section>
 
       {/* Key Dimensions (Variable Studio) */}
-      <section className="bg-gray-800 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-gray-400 mb-3">
-          Variable Studio Parameters
+      <section className="bg-onshape-bg-elevated border border-onshape-border rounded p-3">
+        <h3 className="text-xs font-medium text-onshape-text-muted uppercase tracking-wide mb-2">
+          Variable Studio parameters
         </h3>
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {plan.keyDimensions.map((dim, index) => (
             <div
               key={index}
-              className="flex items-center justify-between py-2 px-3 bg-gray-900 rounded-lg"
+              className="flex items-center justify-between py-2 px-2.5 bg-onshape-bg border border-onshape-border rounded"
             >
               <div>
-                <span className="text-blue-400 font-mono text-sm">#{dim.name}</span>
-                <p className="text-gray-500 text-xs mt-0.5">{dim.purpose}</p>
+                <span className="text-onshape-accent font-mono text-xs">#{dim.name}</span>
+                <p className="text-onshape-text-muted text-[11px] mt-0.5">{dim.purpose}</p>
               </div>
-              <span className="text-white font-medium">
+              <span className="text-onshape-text text-sm font-medium">
                 {dim.value} {dim.unit}
               </span>
             </div>
@@ -54,35 +54,23 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ plan, onApprove, onE
 
       {/* Major Features */}
       {plan.majorFeatures.length > 0 && (
-        <section className="bg-gray-800 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-gray-400 mb-3">Features</h3>
-          <div className="space-y-2">
+        <section className="bg-onshape-bg-elevated border border-onshape-border rounded p-3">
+          <h3 className="text-xs font-medium text-onshape-text-muted uppercase tracking-wide mb-2">Features</h3>
+          <div className="space-y-1.5">
             {plan.majorFeatures.map((feature, index) => (
               <div
                 key={index}
-                className="flex items-center gap-3 py-2 px-3 bg-gray-900 rounded-lg"
+                className="flex items-center gap-2.5 py-2 px-2.5 bg-onshape-bg border border-onshape-border rounded"
               >
-                <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                  <svg
-                    className="w-4 h-4 text-purple-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 6h16M4 12h16m-7 6h7"
-                    />
+                <div className="w-6 h-6 rounded bg-onshape-bg-input flex items-center justify-center shrink-0">
+                  <svg className="w-3.5 h-3.5 text-onshape-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16m-7 6h7" />
                   </svg>
                 </div>
-                <div className="flex-1">
-                  <span className="text-white text-sm">{feature.type}</span>
-                  {feature.quantity && (
-                    <span className="text-gray-500 text-sm"> x{feature.quantity}</span>
-                  )}
-                  <p className="text-gray-500 text-xs">{feature.purpose}</p>
+                <div className="flex-1 min-w-0">
+                  <span className="text-onshape-text text-xs">{feature.type}</span>
+                  {feature.quantity != null && <span className="text-onshape-text-muted text-xs"> ×{feature.quantity}</span>}
+                  <p className="text-onshape-text-muted text-[11px] truncate">{feature.purpose}</p>
                 </div>
               </div>
             ))}
@@ -91,33 +79,33 @@ export const PlanningView: React.FC<PlanningViewProps> = ({ plan, onApprove, onE
       )}
 
       {/* Materials & Tolerances */}
-      {(plan.materials || plan.tolerances) && (
-        <section className="bg-gray-800 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-gray-400 mb-2">Additional Info</h3>
+      {(plan.materials ?? plan.tolerances) && (
+        <section className="bg-onshape-bg-elevated border border-onshape-border rounded p-3">
+          <h3 className="text-xs font-medium text-onshape-text-muted uppercase tracking-wide mb-1.5">Additional info</h3>
           {plan.materials && (
-            <p className="text-gray-300 text-sm">
-              <span className="text-gray-500">Material:</span> {plan.materials}
+            <p className="text-onshape-text text-xs">
+              <span className="text-onshape-text-muted">Material:</span> {plan.materials}
             </p>
           )}
           {plan.tolerances && (
-            <p className="text-gray-300 text-sm mt-1">
-              <span className="text-gray-500">Tolerances:</span> {plan.tolerances}
+            <p className="text-onshape-text text-xs mt-1">
+              <span className="text-onshape-text-muted">Tolerances:</span> {plan.tolerances}
             </p>
           )}
         </section>
       )}
 
       {/* Action Buttons */}
-      <div className="flex gap-3 pt-2">
+      <div className="flex gap-2 pt-2">
         <button
           onClick={onEdit}
-          className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+          className="flex-1 px-3 py-2 bg-onshape-bg-elevated hover:bg-onshape-hover border border-onshape-border text-onshape-text text-sm rounded transition-colors"
         >
           Edit
         </button>
         <button
           onClick={onApprove}
-          className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+          className="flex-1 px-3 py-2 bg-onshape-accent hover:bg-onshape-accent-hover text-white text-sm rounded border-0 transition-colors font-medium"
         >
           Generate in Onshape
         </button>

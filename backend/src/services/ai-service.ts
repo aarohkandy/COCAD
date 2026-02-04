@@ -1,9 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk';
-import type { PlanningDocument, UIAction } from './types.js';
+import Groq from 'groq-sdk';
+import type { PlanningDocument, UIAction, ChatMessage } from './types.js';
 
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+// Initialize Groq client
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
 });
 
 // ============================================================================
@@ -58,6 +58,14 @@ You must output ONLY a valid JSON array of action objects with no additional tex
 - { "type": "DRAW_CIRCLE", "cx": 0, "cy": 0, "radius": 25 }
 - { "type": "SET_DIMENSION", "value": "#variable_name" }
 - { "type": "FILL_INPUT", "field": "Depth" | "Diameter" | "Radius", "value": "#variable_name" }
+- { "type": "FOCUS_INPUT", "selector": "css-selector" }
+- { "type": "TYPE_VALUE", "value": "#variable_name or literal" }
+- { "type": "PRESS_KEY", "key": "Enter" | "Tab" | "Escape" }
+- { "type": "SELECT_FACE", "selector": "css-selector or data-entity-id" }
+- { "type": "SELECT_EDGE", "selector": "css-selector or data-entity-id" }
+- { "type": "CREATE_HOLE", "diameter": "#variable_name", "depth": "#variable_name" }
+- { "type": "CREATE_FILLET", "radius": "#variable_name" }
+- { "type": "CREATE_CHAMFER", "distance": "#variable_name" }
 - { "type": "FINISH_SKETCH" }
 - { "type": "CLICK_OK" }
 - { "type": "WAIT", "ms": 500 }
@@ -65,13 +73,14 @@ You must output ONLY a valid JSON array of action objects with no additional tex
 Rules:
 1. ALWAYS start by creating ALL variables in Variable Studio first
 2. Use "#variable_name" syntax to reference variables in dimension/input values
-3. Add WAIT actions (300-500ms) after major UI transitions (tab switches, dialog opens)
-4. For rectangles, center them at origin unless otherwise specified
-5. For a simple box: sketch rectangle on Front plane, extrude with height
-6. For a cylinder: sketch circle on Top plane, extrude with height
-7. Always FINISH_SKETCH before doing extrude
-8. Always CLICK_OK to confirm feature dialogs
-9. Keep the sequence minimal but complete
+3. Prefer keyboard-based input: use FOCUS_INPUT + TYPE_VALUE + PRESS_KEY where possible
+4. Add WAIT actions (300-500ms) after major UI transitions (tab switches, dialog opens)
+5. For rectangles, center them at origin unless otherwise specified
+6. For a simple box: sketch rectangle on Front plane, extrude with height
+7. For a cylinder: sketch circle on Top plane, extrude with height
+8. Always FINISH_SKETCH before doing extrude
+9. Always CLICK_OK to confirm feature dialogs
+10. Keep the sequence minimal but complete
 
 Example for a 100x50x30mm box:
 [
@@ -102,6 +111,35 @@ Example for a 100x50x30mm box:
   {"type":"CLICK_OK"}
 ]`;
 
+const CLARIFY_SYSTEM_PROMPT = `You are a CAD assistant. Decide if you need more information before generating a plan.
+
+Return ONLY valid JSON with this shape:
+{
+  "readyToGenerate": boolean,
+  "questions": ["short question 1", "short question 2"]
+}
+
+Rules:
+1. Ask at most 3 short questions.
+2. If the request is already clear and buildable, set readyToGenerate=true and return an empty questions array.
+3. Focus on missing dimensions, quantities, or feature details that block a correct model.
+4. Do not add extra commentary or formatting.`;
+
+const VERIFY_SYSTEM_PROMPT = `You are a CAD quality inspector. Review the request, plan, and screenshots.
+
+Return ONLY valid JSON with this shape:
+{
+  "satisfied": boolean,
+  "issues": ["short issue 1", "short issue 2"],
+  "suggestedFixes": [ /* optional UIAction objects */ ]
+}
+
+Rules:
+1. Be strict: mark satisfied=false if a major feature is missing or proportions look wrong.
+2. If satisfied=true, issues must be an empty array.
+3. suggestedFixes should be minimal UI actions to correct obvious mistakes.
+4. Do not add extra commentary or formatting.`;
+
 // ============================================================================
 // AI Service Functions
 // ============================================================================
@@ -114,8 +152,8 @@ export async function generatePlanningDocument(
 ): Promise<PlanningDocument> {
   console.log('[AI] Generating planning document for:', description);
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+  const completion = await groq.chat.completions.create({
+    model: 'meta-llama/llama-4-scout-17b-16e-instruct',
     max_tokens: 2000,
     messages: [
       {
@@ -129,14 +167,13 @@ Generate the planning document JSON:`,
     ],
   });
 
-  // Extract text content
-  const textContent = message.content.find((c) => c.type === 'text');
-  if (!textContent || textContent.type !== 'text') {
+  const content = completion.choices?.[0]?.message?.content;
+  if (!content) {
     throw new Error('No text response from AI');
   }
 
   // Parse JSON from response
-  const jsonText = textContent.text.trim();
+  const jsonText = content.trim();
   
   try {
     // Try to extract JSON if wrapped in markdown code blocks
@@ -160,8 +197,8 @@ export async function generateActionSequence(
 ): Promise<UIAction[]> {
   console.log('[AI] Generating action sequence for plan:', plan.designIntent);
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+  const completion = await groq.chat.completions.create({
+    model: 'meta-llama/llama-4-scout-17b-16e-instruct',
     max_tokens: 4000,
     messages: [
       {
@@ -176,14 +213,13 @@ Generate the UI action sequence JSON array:`,
     ],
   });
 
-  // Extract text content
-  const textContent = message.content.find((c) => c.type === 'text');
-  if (!textContent || textContent.type !== 'text') {
+  const content = completion.choices?.[0]?.message?.content;
+  if (!content) {
     throw new Error('No text response from AI');
   }
 
   // Parse JSON from response
-  const jsonText = textContent.text.trim();
+  const jsonText = content.trim();
   
   try {
     // Try to extract JSON if wrapped in markdown code blocks
@@ -195,6 +231,120 @@ Generate the UI action sequence JSON array:`,
     return actions;
   } catch (error) {
     console.error('[AI] Failed to parse action sequence:', jsonText);
+    throw new Error('Failed to parse AI response as JSON');
+  }
+}
+
+/**
+ * Generate clarifying questions for a description
+ */
+export async function generateClarifyingQuestions(
+  description: string,
+  conversation: ChatMessage[] = []
+): Promise<{ readyToGenerate: boolean; questions: string[] }> {
+  console.log('[AI] Generating clarifying questions for:', description);
+
+  const completion = await groq.chat.completions.create({
+    model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    max_tokens: 800,
+    messages: [
+      {
+        role: 'user',
+        content: `${CLARIFY_SYSTEM_PROMPT}
+
+User request: "${description}"
+
+Conversation so far:
+${JSON.stringify(conversation, null, 2)}
+
+Return the JSON now:`,
+      },
+    ],
+  });
+
+  const content = completion.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('No text response from AI');
+  }
+
+  const jsonText = content.trim();
+
+  try {
+    const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const cleanJson = jsonMatch ? jsonMatch[1].trim() : jsonText;
+    const parsed = JSON.parse(cleanJson) as { readyToGenerate: boolean; questions: string[] };
+
+    return {
+      readyToGenerate: Boolean(parsed.readyToGenerate),
+      questions: Array.isArray(parsed.questions) ? parsed.questions : [],
+    };
+  } catch (error) {
+    console.error('[AI] Failed to parse clarifying questions:', jsonText);
+    throw new Error('Failed to parse AI response as JSON');
+  }
+}
+
+/**
+ * Verify a part using screenshots and plan context
+ */
+export async function verifyPart(
+  screenshots: string[],
+  originalRequest: string,
+  plan: PlanningDocument
+): Promise<{ satisfied: boolean; issues: string[]; suggestedFixes: UIAction[] }> {
+  console.log('[AI] Verifying part with screenshots:', screenshots.length);
+
+  const content: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [
+    {
+      type: 'text',
+      text: `${VERIFY_SYSTEM_PROMPT}
+
+Original request: "${originalRequest}"
+
+Plan:
+${JSON.stringify(plan, null, 2)}
+
+Screenshots follow.`,
+    },
+  ];
+
+  screenshots.forEach((shot) => {
+    content.push({
+      type: 'image_url',
+      image_url: { url: shot },
+    });
+  });
+
+  const completion = await groq.chat.completions.create({
+    model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    max_tokens: 1200,
+    messages: [
+      {
+        role: 'user',
+        content: content as unknown as string,
+      },
+    ],
+  });
+
+  const responseContent = completion.choices?.[0]?.message?.content;
+  if (!responseContent) {
+    throw new Error('No text response from AI');
+  }
+
+  const jsonText = responseContent.trim();
+
+  try {
+    const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const cleanJson = jsonMatch ? jsonMatch[1].trim() : jsonText;
+    const parsed = JSON.parse(cleanJson) as { satisfied: boolean; issues?: string[]; suggestedFixes?: UIAction[] };
+
+    return {
+      satisfied: Boolean(parsed.satisfied),
+      issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+      suggestedFixes: Array.isArray(parsed.suggestedFixes) ? parsed.suggestedFixes : [],
+    };
+  } catch (error) {
+    console.error('[AI] Failed to parse verification response:', jsonText);
     throw new Error('Failed to parse AI response as JSON');
   }
 }

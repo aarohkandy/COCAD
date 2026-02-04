@@ -4,12 +4,15 @@
 
 import type { UIAction } from '../types/actions';
 import { waitForElement, waitForAnyElement, sleep, waitForDOMStable } from './waiter';
-import { clickElement, clickButton, fillInputByName, showActionTooltip, hideActionTooltip } from './clicker';
+import { clickElement, clickButton, fillInput, fillInputByName, showActionTooltip, hideActionTooltip } from './clicker';
 import {
   TOOLBAR,
   PLANES,
   SKETCH_TOOLS,
   DIALOGS,
+  HOLE_DIALOG,
+  FILLET_DIALOG,
+  CHAMFER_DIALOG,
   VARIABLE_STUDIO,
   TABS,
   CANVAS,
@@ -21,6 +24,28 @@ export interface ExecutionOptions {
   onError?: (error: Error, action: UIAction, index: number) => void;
   showTooltips?: boolean;
   pauseBetweenActions?: number;
+  retryCount?: number;
+  retryDelay?: number;
+}
+
+let pauseRequested = false;
+let pauseResolvers: Array<() => void> = [];
+
+export function pauseExecution(): void {
+  pauseRequested = true;
+}
+
+export function resumeExecution(): void {
+  pauseRequested = false;
+  pauseResolvers.forEach((resolve) => resolve());
+  pauseResolvers = [];
+}
+
+async function waitIfPaused(): Promise<void> {
+  if (!pauseRequested) return;
+  return new Promise((resolve) => {
+    pauseResolvers.push(resolve);
+  });
 }
 
 /**
@@ -56,6 +81,38 @@ export async function executeAction(action: UIAction): Promise<void> {
 
     case 'FILL_INPUT':
       await fillInputByName(action.field, action.value);
+      break;
+
+    case 'FOCUS_INPUT':
+      await executeFocusInput(action.selector);
+      break;
+
+    case 'TYPE_VALUE':
+      await executeTypeValue(action.value);
+      break;
+
+    case 'PRESS_KEY':
+      await executePressKey(action.key);
+      break;
+
+    case 'SELECT_FACE':
+      await executeSelectEntity(action.selector);
+      break;
+
+    case 'SELECT_EDGE':
+      await executeSelectEntity(action.selector);
+      break;
+
+    case 'CREATE_HOLE':
+      await executeCreateHole(action.diameter, action.depth);
+      break;
+
+    case 'CREATE_FILLET':
+      await executeCreateFillet(action.radius);
+      break;
+
+    case 'CREATE_CHAMFER':
+      await executeCreateChamfer(action.distance);
       break;
 
     case 'CLICK_OK':
@@ -99,6 +156,8 @@ export async function executeActionSequence(
     onError,
     showTooltips = true,
     pauseBetweenActions = 300,
+    retryCount = 2,
+    retryDelay = 400,
   } = options;
 
   for (let i = 0; i < actions.length; i++) {
@@ -114,22 +173,34 @@ export async function executeActionSequence(
       showActionTooltip(getActionDescription(action));
     }
 
-    try {
-      await executeAction(action);
-      
-      // Pause between actions to let UI settle
-      if (action.type !== 'WAIT' && pauseBetweenActions > 0) {
-        await sleep(pauseBetweenActions);
+    await waitIfPaused();
+
+    let attempt = 0;
+    while (attempt <= retryCount) {
+      try {
+        await executeAction(action);
+
+        // Pause between actions to let UI settle
+        if (action.type !== 'WAIT' && pauseBetweenActions > 0) {
+          await sleep(pauseBetweenActions);
+        }
+        break;
+      } catch (error) {
+        attempt += 1;
+        if (attempt > retryCount) {
+          console.error(`[COCAD] Action failed at index ${i}:`, action, error);
+
+          if (onError) {
+            onError(error as Error, action, i);
+          }
+
+          hideActionTooltip();
+          throw error;
+        }
+
+        console.warn(`[COCAD] Retry ${attempt}/${retryCount} for action ${i}:`, action);
+        await sleep(retryDelay);
       }
-    } catch (error) {
-      console.error(`[COCAD] Action failed at index ${i}:`, action, error);
-      
-      if (onError) {
-        onError(error as Error, action, i);
-      }
-      
-      hideActionTooltip();
-      throw error;
     }
   }
 
@@ -319,6 +390,78 @@ async function executeSetDimension(value: string): Promise<void> {
   }));
 }
 
+async function executeFocusInput(selector: string): Promise<void> {
+  const element = await waitForElement(selector, { timeout: 3000 });
+  await clickElement(element, { highlight: false, delay: 0 });
+
+  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+    element.focus();
+    element.select?.();
+    return;
+  }
+
+  if (element.isContentEditable) {
+    element.focus();
+    return;
+  }
+
+  const nested = element.querySelector('input, textarea, [contenteditable="true"]') as HTMLElement | null;
+  if (nested) {
+    await clickElement(nested, { highlight: false, delay: 0 });
+    return;
+  }
+
+  throw new Error(`Focusable input not found for selector: ${selector}`);
+}
+
+async function executeTypeValue(value: string): Promise<void> {
+  const active = getActiveEditableElement();
+  if (!active) {
+    throw new Error('No active input to type into');
+  }
+
+  if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+    active.focus();
+    active.value = value;
+    active.dispatchEvent(new Event('input', { bubbles: true }));
+    active.dispatchEvent(new Event('change', { bubbles: true }));
+    return;
+  }
+
+  if (active.isContentEditable) {
+    active.focus();
+    const inserted = document.execCommand?.('insertText', false, value);
+    if (!inserted) {
+      active.textContent = value;
+      active.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+}
+
+async function executePressKey(key: 'Enter' | 'Tab' | 'Escape'): Promise<void> {
+  const target = (document.activeElement as HTMLElement | null) || document.body;
+  const keyCodeMap: Record<string, number> = { Enter: 13, Tab: 9, Escape: 27 };
+  const codeMap: Record<string, string> = { Enter: 'Enter', Tab: 'Tab', Escape: 'Escape' };
+  const keyCode = keyCodeMap[key] ?? 0;
+
+  const eventInit: KeyboardEventInit = {
+    bubbles: true,
+    cancelable: true,
+    key,
+    code: codeMap[key] ?? key,
+    keyCode,
+    which: keyCode,
+  };
+
+  target.dispatchEvent(new KeyboardEvent('keydown', eventInit));
+  target.dispatchEvent(new KeyboardEvent('keypress', eventInit));
+  target.dispatchEvent(new KeyboardEvent('keyup', eventInit));
+
+  if (key === 'Tab') {
+    (target as HTMLElement).blur?.();
+  }
+}
+
 async function executeClickOK(): Promise<void> {
   const element = await waitForAnyElement(DIALOGS.OK_BUTTON, { timeout: 3000 });
   await clickElement(element);
@@ -332,6 +475,57 @@ async function executeClickCancel(): Promise<void> {
 async function executeFinishSketch(): Promise<void> {
   const element = await waitForAnyElement(SKETCH_TOOLS.FINISH_SKETCH, { timeout: 3000 });
   await clickElement(element);
+}
+
+async function executeSelectEntity(selector: string): Promise<void> {
+  const selectors = [
+    selector,
+    `[data-entity-id="${selector}"]`,
+    `[data-id="${selector}"]`,
+  ];
+  const element = await waitForAnyElement(selectors, { timeout: 3000 });
+  await clickElement(element);
+}
+
+async function fillInputBySelectors(selectors: string[], value: string): Promise<void> {
+  const element = await waitForAnyElement(selectors, { timeout: 3000 });
+  await fillInput(element as HTMLInputElement, value);
+}
+
+async function executeCreateHole(diameter: string, depth: string): Promise<void> {
+  await executeClickButton('Hole');
+  await waitForAnyElement(DIALOGS.FEATURE_DIALOG, { timeout: 3000 });
+
+  if (diameter) {
+    await fillInputBySelectors(HOLE_DIALOG.DIAMETER_INPUT, diameter);
+  }
+  if (depth) {
+    await fillInputBySelectors(HOLE_DIALOG.DEPTH_INPUT, depth);
+  }
+
+  await executeClickOK();
+}
+
+async function executeCreateFillet(radius: string): Promise<void> {
+  await executeClickButton('Fillet');
+  await waitForAnyElement(DIALOGS.FEATURE_DIALOG, { timeout: 3000 });
+
+  if (radius) {
+    await fillInputBySelectors(FILLET_DIALOG.RADIUS_INPUT, radius);
+  }
+
+  await executeClickOK();
+}
+
+async function executeCreateChamfer(distance: string): Promise<void> {
+  await executeClickButton('Chamfer');
+  await waitForAnyElement(DIALOGS.FEATURE_DIALOG, { timeout: 3000 });
+
+  if (distance) {
+    await fillInputBySelectors(CHAMFER_DIALOG.DISTANCE_INPUT, distance);
+  }
+
+  await executeClickOK();
 }
 
 async function executeCreateVariable(
@@ -422,6 +616,22 @@ function getActionDescription(action: UIAction): string {
       return `Setting dimension: ${action.value}`;
     case 'FILL_INPUT':
       return `Filling ${action.field}`;
+    case 'FOCUS_INPUT':
+      return 'Focusing input';
+    case 'TYPE_VALUE':
+      return 'Typing value';
+    case 'PRESS_KEY':
+      return `Pressing ${action.key}`;
+    case 'SELECT_FACE':
+      return 'Selecting face';
+    case 'SELECT_EDGE':
+      return 'Selecting edge';
+    case 'CREATE_HOLE':
+      return 'Creating hole';
+    case 'CREATE_FILLET':
+      return 'Creating fillet';
+    case 'CREATE_CHAMFER':
+      return 'Creating chamfer';
     case 'CLICK_OK':
       return 'Confirming';
     case 'CLICK_CANCEL':
@@ -437,4 +647,16 @@ function getActionDescription(action: UIAction): string {
     default:
       return 'Processing...';
   }
+}
+
+function getActiveEditableElement(): HTMLInputElement | HTMLTextAreaElement | HTMLElement | null {
+  const active = document.activeElement as HTMLElement | null;
+  if (!active) return null;
+  if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+    return active;
+  }
+  if (active.isContentEditable) {
+    return active;
+  }
+  return null;
 }

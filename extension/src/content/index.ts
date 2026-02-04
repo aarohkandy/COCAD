@@ -1,6 +1,7 @@
 // Content script - injected into Onshape document pages
 import type { MessageType, UIAction } from '../types/actions';
-import { executeActionSequence } from '../automation/executor';
+import { executeActionSequence, pauseExecution, resumeExecution } from '../automation/executor';
+import { capture8Angles } from '../automation/viewport';
 
 console.log('[COCAD] Content script loaded on Onshape');
 
@@ -27,12 +28,14 @@ const injectSidebar = (): HTMLDivElement | null => {
   if (document.getElementById('cocad-sidebar-container')) {
     console.log('[COCAD] Sidebar already exists');
     sidebarIframe = document.getElementById('cocad-sidebar-iframe') as HTMLIFrameElement;
+    document.body.classList.add('cocad-sidebar-visible');
     return document.getElementById('cocad-sidebar-container') as HTMLDivElement;
   }
 
   const container = document.createElement('div');
   container.id = 'cocad-sidebar-container';
   document.body.appendChild(container);
+  document.body.classList.add('cocad-sidebar-visible');
 
   // Create iframe to load sidebar React app
   const iframe = document.createElement('iframe');
@@ -45,24 +48,28 @@ const injectSidebar = (): HTMLDivElement | null => {
   return container;
 };
 
-// Toggle sidebar visibility
+// Toggle sidebar visibility and body margin
 let sidebarVisible = true;
 const toggleSidebar = (): void => {
   const container = document.getElementById('cocad-sidebar-container');
   if (container) {
     sidebarVisible = !sidebarVisible;
-    container.style.display = sidebarVisible ? 'block' : 'none';
+    container.classList.toggle('hidden', !sidebarVisible);
+    document.body.classList.toggle('cocad-sidebar-visible', sidebarVisible);
   }
 };
 
 // Execute actions and report progress
-const executeActions = async (actions: UIAction[]): Promise<void> => {
+const executeActions = async (
+  actions: UIAction[],
+  options: { showTooltips?: boolean; pauseBetweenActions?: number } = {}
+): Promise<void> => {
   console.log('[COCAD] Executing', actions.length, 'actions');
 
   try {
     await executeActionSequence(actions, {
-      showTooltips: true,
-      pauseBetweenActions: 400,
+      showTooltips: options.showTooltips ?? true,
+      pauseBetweenActions: options.pauseBetweenActions ?? 400,
       onProgress: (index, total, action) => {
         console.log(`[COCAD] Progress: ${index + 1}/${total} - ${action.type}`);
         sendToSidebar({
@@ -101,28 +108,17 @@ const init = (): void => {
     return;
   }
 
-  console.log('[COCAD] Onshape document detected, injecting sidebar...');
-  
-  // Wait for Onshape to fully load
-  const waitForOnshape = setInterval(() => {
-    // Check for Onshape's main UI elements to ensure it's loaded
-    const onshapeLoaded = document.querySelector('.os-document-page') || 
-                          document.querySelector('[class*="document"]');
-    
-    if (onshapeLoaded || document.readyState === 'complete') {
-      clearInterval(waitForOnshape);
-      injectSidebar();
-    }
-  }, 500);
+  const injectWhenReady = (): void => {
+    if (document.getElementById('cocad-sidebar-container')) return;
+    console.log('[COCAD] Injecting sidebar...');
+    injectSidebar();
+  };
 
-  // Timeout after 10 seconds
-  setTimeout(() => {
-    clearInterval(waitForOnshape);
-    if (!document.getElementById('cocad-sidebar-container')) {
-      console.log('[COCAD] Timeout waiting for Onshape, injecting anyway');
-      injectSidebar();
-    }
-  }, 10000);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(injectWhenReady, 400));
+  } else {
+    setTimeout(injectWhenReady, 400);
+  }
 };
 
 // Listen for messages from background script
@@ -139,16 +135,36 @@ chrome.runtime.onMessage.addListener((message: MessageType, _sender, sendRespons
 
 // Listen for messages from sidebar iframe
 window.addEventListener('message', (event) => {
-  // Only accept messages from our sidebar iframe
   if (event.source !== sidebarIframe?.contentWindow) {
     return;
   }
 
   const message = event.data;
-  console.log('[COCAD] Received message from sidebar:', message?.type);
-
   if (message?.type === 'EXECUTE_ACTIONS' && Array.isArray(message.actions)) {
-    executeActions(message.actions);
+    const options = message.options || {};
+    executeActions(message.actions, options);
+  }
+  if (message?.type === 'COCAD_TOGGLE_SIDEBAR') {
+    toggleSidebar();
+  }
+  if (message?.type === 'CAPTURE_SCREENSHOTS') {
+    (async () => {
+      try {
+        const screenshots = await capture8Angles();
+        sendToSidebar({ type: 'CAPTURE_SCREENSHOTS_RESULT', screenshots });
+      } catch (error) {
+        sendToSidebar({
+          type: 'CAPTURE_SCREENSHOTS_ERROR',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    })();
+  }
+  if (message?.type === 'PAUSE_ACTIONS') {
+    pauseExecution();
+  }
+  if (message?.type === 'RESUME_ACTIONS') {
+    resumeExecution();
   }
 });
 

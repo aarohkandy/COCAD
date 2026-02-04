@@ -218,6 +218,50 @@ export const DIALOGS = {
 };
 
 // ============================================================================
+// FEATURE PARAMS - Inputs for hole/fillet/chamfer dialogs
+// ============================================================================
+export const HOLE_DIALOG = {
+  DIAMETER_INPUT: [
+    'input[aria-label="Diameter"]',
+    'input[placeholder*="Diameter"]',
+    '[data-field="diameter"] input',
+    '.hole-diameter input',
+  ],
+  DEPTH_INPUT: [
+    'input[aria-label="Depth"]',
+    'input[placeholder*="Depth"]',
+    '[data-field="depth"] input',
+    '.hole-depth input',
+  ],
+  POSITION_X: [
+    'input[aria-label*="X"]',
+    '[data-field="x"] input',
+  ],
+  POSITION_Y: [
+    'input[aria-label*="Y"]',
+    '[data-field="y"] input',
+  ],
+};
+
+export const FILLET_DIALOG = {
+  RADIUS_INPUT: [
+    'input[aria-label="Radius"]',
+    'input[placeholder*="Radius"]',
+    '[data-field="radius"] input',
+    '.fillet-radius input',
+  ],
+};
+
+export const CHAMFER_DIALOG = {
+  DISTANCE_INPUT: [
+    'input[aria-label*="Distance"]',
+    'input[placeholder*="Distance"]',
+    '[data-field="distance"] input',
+    '.chamfer-distance input',
+  ],
+};
+
+// ============================================================================
 // VARIABLE STUDIO - Tab and controls for parametric variables
 // ============================================================================
 export const VARIABLE_STUDIO = {

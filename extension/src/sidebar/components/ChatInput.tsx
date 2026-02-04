@@ -3,9 +3,10 @@ import React, { useState, useRef } from 'react';
 interface ChatInputProps {
   onSubmit: (message: string) => void;
   disabled?: boolean;
+  placeholder?: string;
 }
 
-export const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, disabled }) => {
+export const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, disabled, placeholder }) => {
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -40,28 +41,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, disabled }) => {
         value={message}
         onChange={handleInput}
         onKeyDown={handleKeyDown}
-        placeholder="Describe the part you want to create..."
+        placeholder={placeholder || "Describe the part you want to create..."}
         disabled={disabled}
         rows={3}
-        className="w-full px-4 py-3 pr-12 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full px-3 py-2.5 pr-11 bg-onshape-bg-input border border-onshape-border rounded text-onshape-text placeholder-onshape-text-muted text-sm focus:outline-none focus:border-onshape-accent resize-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       />
       <button
         type="submit"
         disabled={!message.trim() || disabled}
-        className="absolute right-3 bottom-3 p-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg transition-colors"
+        className="absolute right-2.5 bottom-2.5 p-1.5 bg-onshape-accent hover:bg-onshape-accent-hover disabled:bg-onshape-bg-elevated disabled:cursor-not-allowed rounded transition-colors text-white"
       >
         <svg
-          className="w-5 h-5 text-white"
+          className="w-4 h-4"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
+          strokeWidth={2}
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-          />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
         </svg>
       </button>
     </form>

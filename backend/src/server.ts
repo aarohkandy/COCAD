@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { planRouter } from './routes/plan.js';
 import { actionsRouter } from './routes/actions.js';
+import { clarifyRouter } from './routes/clarify.js';
+import { verifyRouter } from './routes/verify.js';
 
 // Load environment variables
 dotenv.config();
@@ -47,6 +49,8 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/plan', planRouter);
 app.use('/api/actions', actionsRouter);
+app.use('/api/clarify', clarifyRouter);
+app.use('/api/verify', verifyRouter);
 
 // Error handling
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -67,7 +71,7 @@ app.listen(PORT, () => {
   console.log(`🚀 COCAD Backend running on http://localhost:${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/health`);
   
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('⚠️  Warning: ANTHROPIC_API_KEY not set. AI features will not work.');
+  if (!process.env.GROQ_API_KEY) {
+    console.warn('⚠️  Warning: GROQ_API_KEY not set. AI features will not work.');
   }
 });

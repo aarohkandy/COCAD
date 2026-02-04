@@ -24,7 +24,7 @@ A Chrome extension that generates parametric CAD models in Onshape using natural
          │    ┌────────────▼────────────┐        │
          │    │      Backend Server      │        │
          │    │  - Express + TypeScript  │        │
-         │    │  - Claude AI (Sonnet 4)  │        │
+         │    │  - Groq (Llama)  │        │
          │    │  - Plan generation       │        │
          │    │  - Action sequences      │        │
          │    └──────────────────────────┘        │
@@ -42,7 +42,7 @@ A Chrome extension that generates parametric CAD models in Onshape using natural
 
 - Node.js 18+
 - Chrome browser
-- Anthropic API key ([get one here](https://console.anthropic.com/))
+- Groq API key ([get one here](https://console.groq.com/))
 
 ### 1. Setup Backend
 
@@ -52,7 +52,7 @@ npm install
 
 # Create .env file with your API key
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
+# Edit .env and add your GROQ_API_KEY
 
 # Start development server
 npm run dev
@@ -182,7 +182,7 @@ document.querySelectorAll('button').forEach(b =>
 
 ### "Failed to generate plan"
 - Check that backend is running on port 3001
-- Verify ANTHROPIC_API_KEY is set in `.env`
+- Verify GROQ_API_KEY is set in `.env`
 
 ### Extension not appearing in Onshape
 - Make sure you're on a document page (URL contains `/documents/`)

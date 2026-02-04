@@ -1,26 +1,32 @@
-/* Reserve space for sidebar so Onshape viewport shifts left instead of being covered */
-body:has(#cocad-sidebar-container) {
+/* Reserve space for sidebar only when visible - Onshape viewport shifts left */
+body.cocad-sidebar-visible {
   margin-right: 380px;
-  transition: margin-right 0.2s ease-out;
+  transition: margin-right 0.25s ease-out;
 }
 
-/* COCAD Sidebar Container Styles */
+/* COCAD Sidebar Container - matches Onshape panel look */
 #cocad-sidebar-container {
   position: fixed;
   top: 0;
   right: 0;
   width: 380px;
   height: 100vh;
-  z-index: 999999;
+  z-index: 2147483647;
   pointer-events: auto;
+  background: #252526;
+  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.4);
+}
+
+#cocad-sidebar-container.hidden {
+  display: none !important;
 }
 
 #cocad-sidebar-iframe {
   width: 100%;
   height: 100%;
   border: none;
-  background: #1a1a2e;
-  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+  display: block;
+  background: #252526;
 }
 
 /* Highlight style for automation feedback */
