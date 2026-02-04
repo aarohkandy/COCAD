@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "COCAD - AI CAD Assistant",
+  "version": "1.0.0",
+  "description": "Generate parametric CAD models in Onshape using natural language",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://cad.onshape.com/*",
+    "http://localhost:3001/*",
+    "http://127.0.0.1:3001/*"
+  ],
+  "background": {
+    "service_worker": "src/background/index.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://cad.onshape.com/documents/*"],
+      "js": ["src/content/index.js"],
+      "css": ["src/content/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/sidebar/*", "assets/*"],
+      "matches": ["https://cad.onshape.com/*"]
+    }
+  ],
+  "action": {
+    "default_title": "COCAD - AI CAD Assistant"
+  }
+}

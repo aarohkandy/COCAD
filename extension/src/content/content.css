@@ -1,0 +1,60 @@
+/* Reserve space for sidebar so Onshape viewport shifts left instead of being covered */
+body:has(#cocad-sidebar-container) {
+  margin-right: 380px;
+  transition: margin-right 0.2s ease-out;
+}
+
+/* COCAD Sidebar Container Styles */
+#cocad-sidebar-container {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 380px;
+  height: 100vh;
+  z-index: 999999;
+  pointer-events: auto;
+}
+
+#cocad-sidebar-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #1a1a2e;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Highlight style for automation feedback */
+.cocad-highlight {
+  outline: 3px solid #00ff88 !important;
+  outline-offset: 2px !important;
+  transition: outline 0.2s ease-in-out;
+}
+
+/* Tooltip for showing current action */
+.cocad-action-tooltip {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a2e;
+  color: #ffffff;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  z-index: 9999999;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  border: 1px solid #00ff88;
+  animation: cocad-fade-in 0.2s ease-out;
+}
+
+@keyframes cocad-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
