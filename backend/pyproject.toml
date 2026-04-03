@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cocad-backend"
+version = "0.1.0"
+description = "Phase 0 FastAPI backend for the COCAD web rebuild."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "email-validator>=2.2.0,<3.0.0",
+  "fastapi>=0.115.0,<1.0.0",
+  "httpx>=0.28.0,<1.0.0",
+  "uvicorn[standard]>=0.30.0,<1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0,<10.0.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["app/tests"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
