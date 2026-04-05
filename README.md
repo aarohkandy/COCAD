@@ -4,7 +4,7 @@ Working vertical slice of the COCAD web rebuild.
 
 ## What works now
 
-- Invite code + email claim flow.
+- Automatic guest session bootstrap on load.
 - Session persistence in SQLite.
 - SSE-backed chat timeline with reload hydration.
 - Interview -> assumptions -> explicit confirmation -> step plan -> accepted build revisions.
@@ -15,8 +15,8 @@ Working vertical slice of the COCAD web rebuild.
 
 ## Services
 
-- `frontend/`: React + Vite + TypeScript app with the gate, chat, step plan, render gallery, and Three.js viewer.
-- `backend/`: FastAPI app with invite claims, SQLite persistence, SSE streaming, deterministic orchestration, and CadQuery artifact generation.
+- `frontend/`: React + Vite + TypeScript app with the chat, step plan, render gallery, and Three.js viewer.
+- `backend/`: FastAPI app with SQLite persistence, SSE streaming, deterministic orchestration, and CadQuery artifact generation.
 
 ## Local development
 

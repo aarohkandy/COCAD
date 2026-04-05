@@ -1,6 +1,11 @@
 import type { SessionSnapshot, StoredSessionGate, StreamEvent } from "./types";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
+const runtimeApiBaseUrl =
+  typeof window !== "undefined"
+    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    : "http://localhost:8000";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? runtimeApiBaseUrl;
 export const SESSION_STORAGE_KEY = "cocad.session";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

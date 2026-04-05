@@ -32,6 +32,28 @@ def test_create_session_without_invite_claim(tmp_path: Path) -> None:
     assert snapshot["workflow"]["stage"] == "waiting_for_brief"
 
 
+def test_cors_allows_localhost_and_loopback_origin(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings=_settings(tmp_path)))
+
+    localhost_response = client.options(
+        "/api/sessions",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    loopback_response = client.options(
+        "/api/sessions",
+        headers={
+            "Origin": "http://127.0.0.1:5173",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert localhost_response.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert loopback_response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+
+
 def test_full_workflow_generates_accepted_revision(tmp_path: Path) -> None:
     client = TestClient(create_app(settings=_settings(tmp_path)))
     session_id = _create_session(client)
@@ -117,7 +139,7 @@ def _settings(tmp_path: Path) -> Settings:
         app_env="test",
         api_prefix="/api",
         public_api_base_url="http://testserver/api",
-        frontend_origin="http://localhost:5173",
+        frontend_origins=("http://localhost:5173", "http://127.0.0.1:5173"),
         llm_base_url="http://localhost:11434/v1",
         llm_api_key="ollama",
         llm_main_model="qwen2.5:14b",

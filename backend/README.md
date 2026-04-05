@@ -4,7 +4,7 @@ FastAPI backend for the COCAD browser app.
 
 ## Current slice
 
-- Invite claims stored in SQLite.
+- Guest sessions created immediately on load.
 - Session/workflow state stored in SQLite with reload-safe hydration.
 - Typed SSE event stream for chat, assumptions, step plans, accepted revisions, and downloads.
 - Deterministic design engine that interviews once when required, publishes assumptions, requires confirmation, and then generates a real step plan.
