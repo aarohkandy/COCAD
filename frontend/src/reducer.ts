@@ -112,14 +112,6 @@ function applyServerEvent(state: AppState, event: StreamEvent): AppState {
     case "interview_question":
       return updateWorkflow(state, {
         latest_summary: "Waiting for the requested clarification.",
-      }, {
-        id: event.id,
-        createdAt: event.created_at,
-        kind: "notice",
-        title: "interview",
-        body: String(event.data.question ?? "Clarification requested."),
-        role: "system",
-        tone: "neutral",
       });
     case "assumptions_ready":
       return updateWorkflow(
@@ -130,7 +122,6 @@ function applyServerEvent(state: AppState, event: StreamEvent): AppState {
           stage: "awaiting_confirmation",
           latest_summary: "Assumptions are ready for confirmation.",
         },
-        noteCard(event, "Assumptions drafted and ready for confirmation."),
       );
     case "assumption_confirmation_requested":
       return updateWorkflow(
@@ -140,7 +131,6 @@ function applyServerEvent(state: AppState, event: StreamEvent): AppState {
           can_confirm_assumptions: true,
           stage: "awaiting_confirmation",
         },
-        noteCard(event, "Assumptions confirmation requested."),
       );
     case "assumptions_confirmed":
       return updateWorkflow(
@@ -152,7 +142,6 @@ function applyServerEvent(state: AppState, event: StreamEvent): AppState {
           stage: "planning",
           latest_summary: "Assumptions confirmed. Generating the build plan.",
         },
-        noteCard(event, "Assumptions confirmed."),
       );
     case "step_plan_published":
       {
@@ -164,7 +153,6 @@ function applyServerEvent(state: AppState, event: StreamEvent): AppState {
             stage: "building",
             latest_summary: `Published ${steps.length} build steps.`,
           },
-          noteCard(event, "Step plan published."),
         );
       }
     case "step_started":
@@ -175,7 +163,6 @@ function applyServerEvent(state: AppState, event: StreamEvent): AppState {
           step_plan: updateStepStatus(state.workflow.step_plan, readStep(event.data.step)?.step_id, "in_progress"),
           stage: "building",
         },
-        noteCard(event, `Started ${readStep(event.data.step)?.step_id ?? "step"}.`),
       );
     case "step_execution_failed":
       return updateWorkflow(
@@ -224,7 +211,6 @@ function applyServerEvent(state: AppState, event: StreamEvent): AppState {
           stage: "building",
           latest_summary: `Accepted ${step?.step_id ?? "step"}.`,
         },
-        noteCard(event, `Accepted ${step?.step_id ?? "step"}.`),
       );
     }
     case "viewer_model_ready":
@@ -232,10 +218,6 @@ function applyServerEvent(state: AppState, event: StreamEvent): AppState {
         ...state,
         modelUrl: String(event.data.modelUrl ?? state.modelUrl ?? ""),
         downloads: normalizeDownloads(event.data.downloads, state.downloads),
-        timeline: appendUnique(
-          state.timeline,
-          noteCard(event, String(event.data.label ?? "Viewer model ready.")),
-        ),
       };
     case "progress_summary":
       return {
@@ -251,7 +233,6 @@ function applyServerEvent(state: AppState, event: StreamEvent): AppState {
       return {
         ...state,
         downloads: normalizeDownloads(event.data.downloads, state.downloads),
-        timeline: appendUnique(state.timeline, noteCard(event, "Downloads are ready.")),
       };
     case "run_cancelled":
       return {

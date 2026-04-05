@@ -162,21 +162,37 @@ export function ModelViewer({
 
   return (
     <section className="viewer-panel">
-      <header className="panel-header">
-        <div>
-          <p className="eyebrow">VIEWER</p>
-          <h2>Accepted Model</h2>
+      <header className="viewer-hero">
+        <div className="viewer-hero-copy">
+          <p className="eyebrow">COCAD / Studio</p>
+          <h2>Accepted geometry only</h2>
+          <p className="viewer-subcopy">
+            The viewer swaps only when a revision passes the checker, so what you see is always the accepted state.
+          </p>
         </div>
         <div className="viewer-meta">
-          <span className="viewer-status">{status}</span>
-          {currentRevisionLabel ? <span className="viewer-revision">{currentRevisionLabel}</span> : null}
+          <span className="status-pill status-pill--ghost">{status}</span>
+          {currentRevisionLabel ? <span className="status-pill status-pill--live">{currentRevisionLabel}</span> : null}
         </div>
       </header>
-      <div ref={mountRef} className="viewer-canvas" />
+      <div className="viewer-stage">
+        <div ref={mountRef} className="viewer-canvas" />
+        {!modelUrl ? (
+          <div className="viewer-empty-state">
+            <p className="summary-label">No accepted revision yet</p>
+            <h3>The model will appear here after the first successful step.</h3>
+          </div>
+        ) : null}
+      </div>
       <footer className="viewer-footer">
         <section className="viewer-info-grid">
           <article className="viewer-info-card">
-            <h3>Mass properties</h3>
+            <div className="card-row">
+              <div>
+                <p className="summary-label">Physics</p>
+                <h3>Mass properties</h3>
+              </div>
+            </div>
             {massProperties ? (
               <dl className="metric-list">
                 <div>
@@ -202,7 +218,12 @@ export function ModelViewer({
           </article>
 
           <article className="viewer-info-card">
-            <h3>Checker notes</h3>
+            <div className="card-row">
+              <div>
+                <p className="summary-label">Audit</p>
+                <h3>Checker notes</h3>
+              </div>
+            </div>
             {checkerReport ? (
               <>
                 <p className={checkerReport.passed ? "status-live" : "status-idle"}>
@@ -222,8 +243,11 @@ export function ModelViewer({
 
         <section className="viewer-gallery">
           <div className="card-row">
-            <h3>Render Gallery</h3>
-            <span>{renderViews.length} views</span>
+            <div>
+              <p className="summary-label">Review Frames</p>
+              <h3>Render gallery</h3>
+            </div>
+            <span className="section-hint">{renderViews.length} views</span>
           </div>
           <div className="gallery-grid">
             {renderViews.map((view) => (
