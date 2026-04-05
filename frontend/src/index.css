@@ -4,8 +4,9 @@
   color-scheme: light;
   color: #25160f;
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.7), transparent 32%),
-    linear-gradient(140deg, #d9c0a4 0%, #f8efe5 42%, #efe2d2 100%);
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(228, 189, 144, 0.3), transparent 26%),
+    linear-gradient(140deg, #d9c0a4 0%, #f8efe5 44%, #efe2d2 100%);
   font-family: "Space Grotesk", sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -42,6 +43,17 @@ button,
   box-shadow: 0 14px 30px rgba(178, 79, 35, 0.22);
 }
 
+.secondary-button {
+  border: 1px solid rgba(88, 58, 39, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.9);
+  color: #6c4d39;
+  cursor: pointer;
+  padding: 0.9rem 1.1rem;
+  font-weight: 700;
+  box-shadow: none;
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
@@ -73,7 +85,9 @@ textarea {
 .viewer-panel,
 .gate-card,
 .summary-card,
-.step-plan-card {
+.step-plan-card,
+.panel-section,
+.viewer-info-card {
   border: 1px solid rgba(88, 58, 39, 0.12);
   border-radius: 1.5rem;
   background: rgba(255, 250, 242, 0.84);
@@ -108,6 +122,7 @@ textarea {
 h1,
 h2,
 h3,
+h4,
 p,
 time {
   margin: 0;
@@ -136,7 +151,8 @@ h2 {
 }
 
 .summary-card,
-.step-plan-card {
+.step-plan-card,
+.panel-section {
   margin: 1rem 1.25rem 0;
   padding: 1rem;
 }
@@ -162,6 +178,85 @@ h2 {
   font-size: 0.85rem;
 }
 
+.card-muted {
+  color: #6c4d39;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.9rem;
+}
+
+.section-hint {
+  color: #6c4d39;
+  font-size: 0.85rem;
+}
+
+.bullet-list {
+  margin: 0.8rem 0 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.bullet-list--compact {
+  margin-top: 0.6rem;
+}
+
+.step-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.step-item {
+  border-radius: 1rem;
+  border: 1px solid rgba(88, 58, 39, 0.1);
+  padding: 0.9rem;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.step-item--accepted {
+  background: rgba(231, 248, 235, 0.9);
+}
+
+.step-item--in_progress {
+  background: rgba(255, 244, 223, 0.94);
+}
+
+.step-item--failed {
+  background: rgba(255, 233, 227, 0.96);
+}
+
+.step-item-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.step-index {
+  color: #7c553a;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.step-status {
+  color: #6c4d39;
+  font-size: 0.82rem;
+  text-transform: capitalize;
+}
+
+.step-current {
+  margin-top: 0.5rem;
+  color: #2f6a4b;
+  font-size: 0.85rem;
+}
+
 .timeline {
   display: flex;
   flex: 1;
@@ -175,6 +270,10 @@ h2 {
   border-radius: 1.15rem;
   padding: 1rem;
   border: 1px solid rgba(88, 58, 39, 0.1);
+}
+
+.timeline-card p {
+  white-space: pre-wrap;
 }
 
 .timeline-card--neutral {
@@ -252,9 +351,94 @@ h2 {
 }
 
 .viewer-footer {
+  display: grid;
+  gap: 1rem;
   padding: 0 1.25rem 1.25rem;
   color: #6c4d39;
   font-size: 0.9rem;
+}
+
+.viewer-meta {
+  display: grid;
+  justify-items: end;
+  gap: 0.2rem;
+}
+
+.viewer-revision {
+  color: #6c4d39;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+}
+
+.viewer-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.viewer-info-card {
+  padding: 1rem;
+}
+
+.viewer-info-card h3,
+.viewer-gallery h3 {
+  margin-bottom: 0.55rem;
+}
+
+.metric-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.metric-list div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.metric-list dt {
+  color: #7c553a;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.metric-list dd {
+  margin: 0;
+  color: #25160f;
+}
+
+.viewer-gallery {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.gallery-card {
+  margin: 0;
+  border-radius: 1rem;
+  overflow: hidden;
+  border: 1px solid rgba(88, 58, 39, 0.12);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.gallery-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+
+.gallery-card figcaption {
+  padding: 0.55rem 0.7rem;
+  color: #6c4d39;
+  font-size: 0.8rem;
+  font-family: "IBM Plex Mono", monospace;
 }
 
 .download-row {
@@ -302,6 +486,10 @@ h2 {
   align-self: flex-start;
 }
 
+.panel-section + .panel-section {
+  margin-top: 0.75rem;
+}
+
 @media (max-width: 980px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -314,5 +502,10 @@ h2 {
 
   .viewer-canvas {
     min-height: 320px;
+  }
+
+  .viewer-info-grid,
+  .gallery-grid {
+    grid-template-columns: 1fr;
   }
 }

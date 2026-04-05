@@ -31,4 +31,4 @@ class SafetyService:
         match = self._pattern.search(message)
         if not match:
             return None
-        return f"Blocked by placeholder Phase 0 safety policy on term '{match.group(0)}'."
+        return f"Blocked by the safety policy on term '{match.group(0)}'."

@@ -15,14 +15,25 @@ import {
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-import type { ArtifactLink } from "../types";
+import type { ArtifactLink, CheckerReport, MassProperties, RenderView } from "../types";
 
 interface ModelViewerProps {
   modelUrl: string | null;
   downloads: ArtifactLink[];
+  renderViews: RenderView[];
+  massProperties: MassProperties | null;
+  checkerReport: CheckerReport | null;
+  currentRevisionLabel: string | null;
 }
 
-export function ModelViewer({ modelUrl, downloads }: ModelViewerProps) {
+export function ModelViewer({
+  modelUrl,
+  downloads,
+  renderViews,
+  massProperties,
+  checkerReport,
+  currentRevisionLabel,
+}: ModelViewerProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<WebGLRenderer | null>(null);
   const cameraRef = useRef<PerspectiveCamera | null>(null);
@@ -30,7 +41,7 @@ export function ModelViewer({ modelUrl, downloads }: ModelViewerProps) {
   const controlsRef = useRef<OrbitControls | null>(null);
   const modelRef = useRef<Group | null>(null);
   const initializedCameraRef = useRef(false);
-  const [status, setStatus] = useState("Waiting for model");
+  const [status, setStatus] = useState("Waiting for accepted revision");
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -105,11 +116,11 @@ export function ModelViewer({ modelUrl, downloads }: ModelViewerProps) {
 
   useEffect(() => {
     if (!modelUrl || !sceneRef.current || !cameraRef.current || !controlsRef.current) {
-      setStatus("Waiting for model");
+      setStatus("Waiting for accepted revision");
       return;
     }
 
-    setStatus("Loading GLB");
+    setStatus("Loading accepted GLB");
     const loader = new GLTFLoader(
       new LoadingManager(
         () => setStatus("Model ready"),
@@ -142,7 +153,6 @@ export function ModelViewer({ modelUrl, downloads }: ModelViewerProps) {
           controlsRef.current.update();
           initializedCameraRef.current = true;
         }
-
         setStatus("Model ready");
       },
       undefined,
@@ -155,13 +165,76 @@ export function ModelViewer({ modelUrl, downloads }: ModelViewerProps) {
       <header className="panel-header">
         <div>
           <p className="eyebrow">VIEWER</p>
-          <h2>Static GLB Preview</h2>
+          <h2>Accepted Model</h2>
         </div>
-        <span className="viewer-status">{status}</span>
+        <div className="viewer-meta">
+          <span className="viewer-status">{status}</span>
+          {currentRevisionLabel ? <span className="viewer-revision">{currentRevisionLabel}</span> : null}
+        </div>
       </header>
       <div ref={mountRef} className="viewer-canvas" />
       <footer className="viewer-footer">
-        <p>Orbit, pan, and zoom stay stable while the model reference changes.</p>
+        <section className="viewer-info-grid">
+          <article className="viewer-info-card">
+            <h3>Mass properties</h3>
+            {massProperties ? (
+              <dl className="metric-list">
+                <div>
+                  <dt>Volume</dt>
+                  <dd>{massProperties.volume_mm3.toFixed(1)} mm3</dd>
+                </div>
+                <div>
+                  <dt>Center</dt>
+                  <dd>
+                    {massProperties.center_of_mass_mm.map((value) => value.toFixed(1)).join(", ")} mm
+                  </dd>
+                </div>
+                <div>
+                  <dt>Bounding box</dt>
+                  <dd>
+                    {massProperties.bounding_box_mm.map((value) => value.toFixed(1)).join(" x ")} mm
+                  </dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="card-muted">Mass properties will appear after the first accepted revision.</p>
+            )}
+          </article>
+
+          <article className="viewer-info-card">
+            <h3>Checker notes</h3>
+            {checkerReport ? (
+              <>
+                <p className={checkerReport.passed ? "status-live" : "status-idle"}>
+                  {checkerReport.summary}
+                </p>
+                <ul className="bullet-list bullet-list--compact">
+                  {checkerReport.notes.map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="card-muted">Checker feedback appears after accepted revisions.</p>
+            )}
+          </article>
+        </section>
+
+        <section className="viewer-gallery">
+          <div className="card-row">
+            <h3>Render Gallery</h3>
+            <span>{renderViews.length} views</span>
+          </div>
+          <div className="gallery-grid">
+            {renderViews.map((view) => (
+              <figure key={view.key} className="gallery-card">
+                <img src={view.url} alt={view.label} loading="lazy" />
+                <figcaption>{view.label}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
+
         <div className="download-row">
           {downloads.map((download) => (
             <a key={download.label} className="download-button" href={download.url} target="_blank" rel="noreferrer">

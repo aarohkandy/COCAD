@@ -1,17 +1,19 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { formatTimestamp, toneClassName } from "../reducer";
-import type { TimelineCard } from "../types";
+import type { TimelineCard, WorkflowSnapshot } from "../types";
 
 interface ChatPanelProps {
   email: string;
   inviteCode: string;
   latestSummary: string;
+  workflow: WorkflowSnapshot;
   timeline: TimelineCard[];
   isStreaming: boolean;
   isSending: boolean;
   error: string | null;
   onSend: (message: string) => Promise<void>;
+  onConfirmAssumptions: () => Promise<void>;
   onReset: () => void;
 }
 
@@ -19,15 +21,16 @@ export function ChatPanel({
   email,
   inviteCode,
   latestSummary,
+  workflow,
   timeline,
   isStreaming,
   isSending,
   error,
   onSend,
+  onConfirmAssumptions,
   onReset,
 }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
-  const orderedTimeline = useMemo(() => timeline, [timeline]);
 
   return (
     <section className="chat-panel">
@@ -50,28 +53,82 @@ export function ChatPanel({
         <p>{latestSummary}</p>
       </section>
 
-      <section className="step-plan-card">
+      {workflow.pending_assumptions ? (
+        <section className="panel-section">
+          <div className="card-row">
+            <h3>Pending Assumptions</h3>
+            <span>{workflow.stage}</span>
+          </div>
+          <p className="card-muted">{workflow.pending_assumptions.intent_summary}</p>
+          <ul className="bullet-list">
+            {workflow.pending_assumptions.assumptions.map((assumption) => (
+              <li key={assumption}>{assumption}</li>
+            ))}
+          </ul>
+          <div className="panel-actions">
+            <span className="section-hint">
+              Surface units: {workflow.pending_assumptions.surface_units}
+            </span>
+            {workflow.can_confirm_assumptions ? (
+              <button type="button" className="secondary-button" onClick={onConfirmAssumptions} disabled={isSending}>
+                Confirm assumptions
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {workflow.confirmed_assumptions ? (
+        <section className="panel-section">
+          <div className="card-row">
+            <h3>Confirmed Assumptions</h3>
+            <span>{workflow.confirmed_assumptions.surface_units}</span>
+          </div>
+          <ul className="bullet-list">
+            {workflow.confirmed_assumptions.assumptions.map((assumption) => (
+              <li key={assumption}>{assumption}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <section className="panel-section">
         <div className="card-row">
           <h3>Step Plan</h3>
-          <span>Phase 1</span>
+          <span>{workflow.step_plan.length} steps</span>
         </div>
-        <p>
-          This panel is already reserved for the confirmed step list. Phase 0 only proves
-          the chat loop and viewer plumbing.
-        </p>
+        {workflow.step_plan.length === 0 ? (
+          <p className="card-muted">The step plan will appear after assumptions are confirmed.</p>
+        ) : (
+          <div className="step-list">
+            {workflow.step_plan.map((step) => (
+              <article key={step.step_id} className={`step-item step-item--${step.status}`}>
+                <div className="step-item-header">
+                  <div>
+                    <p className="step-index">{step.step_id}</p>
+                    <h4>{step.title}</h4>
+                  </div>
+                  <span className="step-status">{step.status.replace("_", " ")}</span>
+                </div>
+                <p className="card-muted">{step.description}</p>
+                {workflow.current_step_id === step.step_id ? <p className="step-current">Current step</p> : null}
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       <div className="timeline">
-        {orderedTimeline.length === 0 ? (
+        {timeline.length === 0 ? (
           <div className="timeline-card timeline-card--neutral">
             <div className="timeline-card-header">
               <h3>Waiting for session events</h3>
             </div>
-            <p>Create a session to begin the Phase 0 round-trip.</p>
+            <p>Create a session to begin the design flow.</p>
           </div>
         ) : null}
 
-        {orderedTimeline.map((item) => (
+        {timeline.map((item) => (
           <article key={item.id} className={`timeline-card ${toneClassName(item.tone)}`}>
             <div className="timeline-card-header">
               <div>
@@ -110,7 +167,7 @@ export function ChatPanel({
             rows={5}
           />
           <button className="primary-button" type="submit" disabled={isSending || !draft.trim()}>
-            {isSending ? "Streaming..." : "Send"}
+            {isSending ? "Working..." : "Send"}
           </button>
         </form>
       </footer>

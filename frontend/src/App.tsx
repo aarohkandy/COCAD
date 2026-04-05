@@ -1,7 +1,9 @@
 import { useEffect, useReducer, useState } from "react";
 
 import {
+  claimInvite,
   clearStoredGate,
+  confirmAssumptions,
   createEventSource,
   createSession,
   hydrateSession,
@@ -14,7 +16,7 @@ import { ChatPanel } from "./components/ChatPanel";
 import { GateScreen } from "./components/GateScreen";
 import { ModelViewer } from "./components/ModelViewer";
 import { appReducer, initialState } from "./reducer";
-import type { EventType } from "./types";
+import type { EventType, GateFormValues } from "./types";
 
 const EVENT_TYPES: EventType[] = [
   "chat_token",
@@ -66,14 +68,8 @@ function App() {
     };
 
     EVENT_TYPES.forEach((eventType) => source.addEventListener(eventType, handleEvent));
-
-    source.onerror = () => {
-      dispatch({ type: "streamClosed" });
-    };
-
-    source.onopen = () => {
-      dispatch({ type: "streamOpen" });
-    };
+    source.onopen = () => dispatch({ type: "streamOpen" });
+    source.onerror = () => dispatch({ type: "streamClosed" });
 
     return () => {
       EVENT_TYPES.forEach((eventType) => source.removeEventListener(eventType, handleEvent));
@@ -82,13 +78,15 @@ function App() {
     };
   }, [state.sessionId]);
 
-  const handleSessionCreate = async (values: { email: string; inviteCode: string }) => {
+  const handleSessionCreate = async (values: GateFormValues) => {
     dispatch({ type: "error", message: null });
     setIsCreatingSession(true);
     try {
-      const snapshot = await createSession(values);
+      const claim = await claimInvite(values);
+      const snapshot = await createSession(claim.claim_id);
       writeStoredGate({
         sessionId: snapshot.session_id,
+        claimId: claim.claim_id,
         email: values.email,
         inviteCode: values.inviteCode,
       });
@@ -96,7 +94,7 @@ function App() {
     } catch (error) {
       dispatch({
         type: "error",
-        message: error instanceof Error ? error.message : "Failed to create session",
+        message: error instanceof Error ? error.message : "Failed to start session",
       });
     } finally {
       setIsCreatingSession(false);
@@ -111,12 +109,29 @@ function App() {
     dispatch({ type: "sendStarted" });
     try {
       await postMessage(state.sessionId, message);
-      dispatch({ type: "sendFinished" });
     } catch (error) {
       dispatch({
         type: "error",
         message: error instanceof Error ? error.message : "Failed to send message",
       });
+      dispatch({ type: "sendFinished" });
+    }
+  };
+
+  const handleConfirmAssumptions = async () => {
+    if (!state.sessionId) {
+      return;
+    }
+
+    dispatch({ type: "sendStarted" });
+    try {
+      await confirmAssumptions(state.sessionId);
+    } catch (error) {
+      dispatch({
+        type: "error",
+        message: error instanceof Error ? error.message : "Failed to confirm assumptions",
+      });
+      dispatch({ type: "sendFinished" });
     }
   };
 
@@ -139,14 +154,23 @@ function App() {
         email={state.email}
         inviteCode={state.inviteCode}
         latestSummary={state.latestSummary}
+        workflow={state.workflow}
         timeline={state.timeline}
         isStreaming={state.isStreaming}
         isSending={state.isSending}
         error={state.error}
         onSend={handleSend}
+        onConfirmAssumptions={handleConfirmAssumptions}
         onReset={handleReset}
       />
-      <ModelViewer modelUrl={state.modelUrl} downloads={state.downloads} />
+      <ModelViewer
+        modelUrl={state.modelUrl}
+        downloads={state.downloads}
+        renderViews={state.workflow.render_views}
+        massProperties={state.workflow.mass_properties}
+        checkerReport={state.workflow.checker_report}
+        currentRevisionLabel={state.workflow.current_revision_label}
+      />
     </main>
   );
 }

@@ -1,7 +1,7 @@
-import type { GateFormValues, SessionSnapshot, StreamEvent } from "./types";
+import type { GateFormValues, InviteClaimResponse, SessionSnapshot, StoredSessionGate, StreamEvent } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
-export const SESSION_STORAGE_KEY = "cocad.phase0.session";
+export const SESSION_STORAGE_KEY = "cocad.session";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -20,13 +20,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function createSession(values: GateFormValues): Promise<SessionSnapshot> {
-  return request<SessionSnapshot>("/api/sessions", {
+export function claimInvite(values: GateFormValues): Promise<InviteClaimResponse> {
+  return request<InviteClaimResponse>("/api/invite/claim", {
     method: "POST",
     body: JSON.stringify({
       email: values.email,
       invite_code: values.inviteCode,
     }),
+  });
+}
+
+export function createSession(claimId: string): Promise<SessionSnapshot> {
+  return request<SessionSnapshot>("/api/sessions", {
+    method: "POST",
+    body: JSON.stringify({ claim_id: claimId }),
   });
 }
 
@@ -41,14 +48,14 @@ export function postMessage(sessionId: string, message: string): Promise<{ queue
   });
 }
 
-export function createEventSource(sessionId: string): EventSource {
-  return new EventSource(`${API_BASE_URL}/api/sessions/${sessionId}/events`);
+export function confirmAssumptions(sessionId: string): Promise<{ queued: boolean }> {
+  return request<{ queued: boolean }>(`/api/sessions/${sessionId}/assumptions/confirm`, {
+    method: "POST",
+  });
 }
 
-export interface StoredSessionGate {
-  sessionId: string;
-  email: string;
-  inviteCode: string;
+export function createEventSource(sessionId: string): EventSource {
+  return new EventSource(`${API_BASE_URL}/api/sessions/${sessionId}/events`);
 }
 
 export function writeStoredGate(value: StoredSessionGate): void {
@@ -60,6 +67,7 @@ export function readStoredGate(): StoredSessionGate | null {
   if (!raw) {
     return null;
   }
+
   try {
     return JSON.parse(raw) as StoredSessionGate;
   } catch {

@@ -6,10 +6,11 @@ import json
 import httpx
 
 from app.domain.models import ConversationMessage
+from app.llm.providers.base import ImageInput
 
 
 class OpenAICompatibleProvider:
-    def __init__(self, *, base_url: str, api_key: str, timeout_seconds: float = 120.0) -> None:
+    def __init__(self, *, base_url: str, api_key: str, timeout_seconds: float = 45.0) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout_seconds
         self._headers = {
@@ -57,6 +58,76 @@ class OpenAICompatibleProvider:
                     chunk = self._extract_content(data)
                     if chunk:
                         yield chunk
+
+    async def complete(
+        self,
+        *,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        images: Sequence[ImageInput] | None = None,
+    ) -> str:
+        payload = {
+            "model": model,
+            "stream": False,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": self._build_user_content(user_prompt=user_prompt, images=images),
+                },
+            ],
+        }
+        timeout = httpx.Timeout(connect=10.0, read=self._timeout, write=30.0, pool=30.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{self._base_url}/chat/completions",
+                headers=self._headers,
+                json=payload,
+            )
+            response.raise_for_status()
+        data = response.json()
+        return self._extract_message_content(data)
+
+    @staticmethod
+    def _build_user_content(*, user_prompt: str, images: Sequence[ImageInput] | None) -> str | list[dict[str, object]]:
+        if not images:
+            return user_prompt
+        content: list[dict[str, object]] = [{"type": "text", "text": user_prompt}]
+        for image in images:
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{image.mime_type};base64,{image.data_base64}",
+                    },
+                }
+            )
+        return content
+
+    @staticmethod
+    def _extract_message_content(data: dict[str, object]) -> str:
+        choices = data.get("choices")
+        if not isinstance(choices, list) or not choices:
+            return ""
+        choice = choices[0]
+        if not isinstance(choice, dict):
+            return ""
+        message = choice.get("message")
+        if not isinstance(message, dict):
+            return ""
+        content = message.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, dict):
+                    text = item.get("text")
+                    if isinstance(text, str):
+                        parts.append(text)
+            return "".join(parts)
+        return ""
 
     @staticmethod
     def _extract_content(data: dict[str, object]) -> str:

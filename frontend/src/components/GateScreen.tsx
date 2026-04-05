@@ -11,18 +11,17 @@ interface GateScreenProps {
 export function GateScreen({ onSubmit, disabled, error }: GateScreenProps) {
   const [values, setValues] = useState<GateFormValues>({
     email: "",
-    inviteCode: "PHASE0",
+    inviteCode: "PHASE1",
   });
 
   return (
     <main className="gate-shell">
       <section className="gate-card">
-        <p className="eyebrow">PHASE 0</p>
+        <p className="eyebrow">WORKSPACE ACCESS</p>
         <h1>COCAD</h1>
         <p className="gate-copy">
-          This prototype already proves the live chat loop and the in-app GLB viewer.
-          Invite validation is still a placeholder, but the session shape matches the
-          future product flow from day one.
+          Claim an invite, open a live design session, and start shaping a 3D object with
+          the AI chat and viewer pair.
         </p>
         <form
           className="gate-form"
@@ -51,7 +50,7 @@ export function GateScreen({ onSubmit, disabled, error }: GateScreenProps) {
               onChange={(event) =>
                 setValues((current) => ({ ...current, inviteCode: event.target.value }))
               }
-              placeholder="PHASE0"
+              placeholder="PHASE1"
               required
             />
           </label>

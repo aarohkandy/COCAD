@@ -19,6 +19,11 @@ backend/.pytest_cache/
 backend/.mypy_cache/
 backend/.ruff_cache/
 backend/artifacts/renders/
+backend/artifacts/generated/
+backend/artifacts/scratch/
+backend/artifacts/sessions/
+backend/data/
+.codex-run/
 *.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts

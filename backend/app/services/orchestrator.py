@@ -2,29 +2,29 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from copy import deepcopy
 from uuid import uuid4
 
-from app.llm.providers.base import StreamingChatProvider
-from app.services.prompt_loader import PromptLoader
+from app.domain.models import WorkflowState
+from app.services.cad_service import CadService
+from app.services.design_engine import DesignEngine
 from app.services.safety import SafetyService
 from app.services.session_store import SessionStore
 
 
-class Phase0Orchestrator:
+class WorkflowOrchestrator:
     def __init__(
         self,
         *,
         session_store: SessionStore,
-        prompt_loader: PromptLoader,
+        design_engine: DesignEngine,
+        cad_service: CadService,
         safety_service: SafetyService,
-        llm_provider: StreamingChatProvider,
-        model_name: str,
     ) -> None:
         self._session_store = session_store
-        self._prompt_loader = prompt_loader
+        self._design_engine = design_engine
+        self._cad_service = cad_service
         self._safety_service = safety_service
-        self._llm_provider = llm_provider
-        self._model_name = model_name
 
     async def handle_user_message(self, *, session_id: str, message_text: str) -> None:
         violation = self._safety_service.check(message_text)
@@ -32,104 +32,279 @@ class Phase0Orchestrator:
             await self._session_store.append_event(
                 session_id,
                 "safety_refusal",
-                {
-                    "messageId": f"msg-{uuid4().hex}",
-                    "message": violation,
-                },
+                {"messageId": f"msg-{uuid4().hex}", "message": violation},
             )
             await self._session_store.append_event(
                 session_id,
                 "progress_summary",
-                {"summary": "Request blocked by the placeholder safety policy."},
+                {"summary": "Request blocked by the safety policy."},
             )
             return
 
+        workflow = await self._session_store.get_workflow(session_id)
+        if workflow is None:
+            return
+
+        if workflow.stage == "awaiting_confirmation" and self._design_engine.is_confirmation(message_text):
+            await self.confirm_assumptions(session_id=session_id)
+            return
+
+        if workflow.stage in {"waiting_for_brief", "interviewing", "awaiting_confirmation"}:
+            await self._handle_prebuild_message(session_id=session_id, workflow=workflow, message_text=message_text)
+            return
+
+        await self._handle_revision_message(session_id=session_id, workflow=workflow, message_text=message_text)
+
+    async def confirm_assumptions(self, *, session_id: str) -> None:
+        workflow = await self._session_store.get_workflow(session_id)
+        if workflow is None or workflow.pending_assumptions is None:
+            return
+
+        workflow.confirmed_assumptions = workflow.pending_assumptions
+        workflow.pending_assumptions = None
+        workflow.stage = "planning"
+        workflow.latest_summary = "Assumptions confirmed. Writing the build plan and starting the model."
+        await self._session_store.save_workflow(session_id, workflow=workflow)
+        await self._session_store.append_event(
+            session_id,
+            "assumptions_confirmed",
+            {"assumptions": workflow.confirmed_assumptions.model_dump()},
+        )
         await self._session_store.append_event(
             session_id,
             "progress_summary",
-            {"summary": "Phase 0 round-trip started."},
+            {"summary": workflow.latest_summary},
+        )
+        await self._emit_assistant_message(
+            session_id,
+            "Assumptions confirmed. I'm publishing the step plan and building accepted revisions one step at a time.",
+        )
+        await self._build_from_workflow(session_id=session_id, workflow=workflow)
+
+    async def _handle_prebuild_message(self, *, session_id: str, workflow: WorkflowState, message_text: str) -> None:
+        workflow.brief_messages.append(message_text)
+        spec = self._design_engine.build_spec(workflow.brief_messages)
+        workflow.draft_spec = spec
+        workflow.design_kind = spec.kind
+
+        if workflow.stage != "awaiting_confirmation" and self._design_engine.needs_clarification(spec, workflow.interview_rounds):
+            workflow.stage = "interviewing"
+            workflow.interview_rounds += 1
+            workflow.latest_summary = "Collecting one required clarification before assumptions are locked."
+            await self._session_store.save_workflow(session_id, workflow=workflow)
+            question = self._design_engine.interview_question(spec)
+            await self._session_store.append_event(session_id, "interview_question", {"question": question})
+            await self._session_store.append_event(
+                session_id,
+                "progress_summary",
+                {"summary": workflow.latest_summary},
+            )
+            await self._emit_assistant_message(session_id, question)
+            return
+
+        workflow.pending_assumptions = self._design_engine.build_assumptions(spec)
+        workflow.stage = "awaiting_confirmation"
+        workflow.latest_summary = "Assumptions are ready for confirmation."
+        await self._session_store.save_workflow(session_id, workflow=workflow)
+        await self._session_store.append_event(
+            session_id,
+            "assumptions_ready",
+            {"assumptions": workflow.pending_assumptions.model_dump()},
+        )
+        await self._session_store.append_event(
+            session_id,
+            "assumption_confirmation_requested",
+            {"assumptions": workflow.pending_assumptions.model_dump()},
+        )
+        await self._session_store.append_event(
+            session_id,
+            "progress_summary",
+            {"summary": workflow.latest_summary},
+        )
+        await self._emit_assistant_message(session_id, self._assumption_message(workflow.pending_assumptions.assumptions))
+
+    async def _handle_revision_message(self, *, session_id: str, workflow: WorkflowState, message_text: str) -> None:
+        workflow.brief_messages.append(message_text)
+        spec = self._design_engine.build_spec(workflow.brief_messages)
+        workflow.draft_spec = spec
+        workflow.design_kind = spec.kind
+        workflow.confirmed_assumptions = self._design_engine.build_assumptions(spec)
+        workflow.pending_assumptions = None
+        workflow.latest_summary = "Revision request received. Replanning and rebuilding from the updated brief."
+        workflow.stage = "planning"
+        await self._session_store.save_workflow(session_id, workflow=workflow)
+        await self._session_store.append_event(
+            session_id,
+            "assumptions_confirmed",
+            {"assumptions": workflow.confirmed_assumptions.model_dump()},
+        )
+        await self._session_store.append_event(
+            session_id,
+            "progress_summary",
+            {"summary": workflow.latest_summary},
+        )
+        await self._emit_assistant_message(
+            session_id,
+            "I've absorbed that correction and I'm regenerating the plan from the updated source of truth.",
+        )
+        await self._build_from_workflow(session_id=session_id, workflow=workflow)
+
+    async def _build_from_workflow(self, *, session_id: str, workflow: WorkflowState) -> None:
+        spec = workflow.draft_spec
+        assumptions = workflow.confirmed_assumptions
+        if spec is None or assumptions is None:
+            return
+
+        step_plan, step_code = self._design_engine.generate_plan(spec)
+        workflow.step_plan = step_plan
+        workflow.step_code = step_code
+        workflow.stage = "planning"
+        workflow.current_step_id = None
+        workflow.render_views = []
+        workflow.mass_properties = None
+        workflow.checker_report = None
+        await self._session_store.save_workflow(session_id, workflow=workflow)
+        await self._session_store.append_event(
+            session_id,
+            "step_plan_published",
+            {"steps": [step.model_dump() for step in workflow.step_plan]},
+        )
+        await self._emit_assistant_message(
+            session_id,
+            f"Step plan published with {len(workflow.step_plan)} build steps. I'm executing and validating each accepted revision now.",
         )
 
-        history = await self._session_store.get_messages(session_id)
-        system_prompt = self._prompt_loader.build_main_prompt()
-        assistant_chunks: list[str] = []
-        assistant_message_id = f"msg-{uuid4().hex}"
+        workflow.stage = "building"
+        await self._session_store.save_workflow(session_id, workflow=workflow)
+        state: dict = {"solid": None, "parts": {}}
 
-        try:
-            async for chunk in self._llm_provider.stream_chat(
-                model=self._model_name,
-                system_prompt=system_prompt,
-                messages=history,
-            ):
-                assistant_chunks.append(chunk)
+        for index, step in enumerate(workflow.step_plan):
+            for item in workflow.step_plan:
+                if item.step_id == step.step_id:
+                    item.status = "in_progress"
+                elif item.status != "accepted":
+                    item.status = "pending"
+            workflow.current_step_id = step.step_id
+            workflow.latest_summary = f"Executing {step.step_id}: {step.title}"
+            await self._session_store.save_workflow(session_id, workflow=workflow)
+            await self._session_store.append_event(session_id, "step_started", {"step": step.model_dump()})
+            await self._session_store.append_event(
+                session_id,
+                "progress_summary",
+                {"summary": workflow.latest_summary},
+            )
+            try:
+                state = self._cad_service.execute_step(step.step_id, workflow.step_code[step.step_id], deepcopy(state))
+                workflow.revision_number += 1
+                artifacts = self._cad_service.export_revision(
+                    session_id=session_id,
+                    spec=spec,
+                    state=state,
+                    step_id=step.step_id,
+                    revision_number=workflow.revision_number,
+                    api_root=workflow.api_root,
+                )
+            except Exception as exc:  # noqa: BLE001
+                step.status = "failed"
+                workflow.stage = "blocked"
+                workflow.latest_summary = f"{step.step_id} failed during execution."
+                await self._session_store.save_workflow(session_id, workflow=workflow)
                 await self._session_store.append_event(
                     session_id,
-                    "chat_token",
-                    {
-                        "messageId": assistant_message_id,
-                        "role": "assistant",
-                        "delta": chunk,
-                        "complete": False,
-                    },
+                    "step_execution_failed",
+                    {"step": step.model_dump(), "error": str(exc)},
                 )
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:  # noqa: BLE001
-            fallback = (
-                "The Phase 0 assistant could not reach the configured model endpoint. "
-                f"Details: {exc}"
-            )
-            await self._session_store.add_assistant_message(
+                await self._session_store.append_event(
+                    session_id,
+                    "progress_summary",
+                    {"summary": workflow.latest_summary},
+                )
+                await self._emit_assistant_message(session_id, f"{step.step_id} failed to execute cleanly: {exc}")
+                return
+
+            step.status = "accepted"
+            workflow.render_views = artifacts.render_views
+            workflow.mass_properties = artifacts.mass_properties
+            workflow.checker_report = artifacts.checker_report
+            workflow.current_revision_label = artifacts.revision_label
+            workflow.current_model_url = artifacts.model_url
+            workflow.downloads = artifacts.downloads
+            workflow.latest_summary = f"Accepted {step.step_id}. Viewer and render bundle updated."
+            await self._session_store.save_workflow(
                 session_id,
-                fallback,
-                message_id=assistant_message_id,
+                workflow=workflow,
+                model_url=artifacts.model_url,
+                downloads=artifacts.downloads,
             )
             await self._session_store.append_event(
                 session_id,
-                "chat_token",
+                "step_accepted",
                 {
-                    "messageId": assistant_message_id,
-                    "role": "assistant",
-                    "delta": fallback,
-                    "complete": True,
+                    "step": step.model_dump(),
+                    "renderViews": [view.model_dump() for view in artifacts.render_views],
+                    "massProperties": artifacts.mass_properties.model_dump(),
+                    "checker": artifacts.checker_report.model_dump(),
+                    "revisionLabel": artifacts.revision_label,
+                },
+            )
+            await self._session_store.append_event(
+                session_id,
+                "viewer_model_ready",
+                {
+                    "modelUrl": artifacts.model_url,
+                    "label": f"Accepted revision after {step.step_id}",
+                    "downloads": [download.model_dump() for download in artifacts.downloads],
                 },
             )
             await self._session_store.append_event(
                 session_id,
                 "progress_summary",
-                {"summary": "Phase 0 could not reach the configured model endpoint."},
+                {"summary": workflow.latest_summary},
             )
-            return
+            if index == len(workflow.step_plan) - 1:
+                await self._session_store.append_event(
+                    session_id,
+                    "downloads_ready",
+                    {"downloads": [download.model_dump() for download in artifacts.downloads]},
+                )
 
-        final_response = "".join(assistant_chunks).strip()
-        if not final_response:
-            final_response = "The configured main model returned an empty response."
-
-        await self._session_store.add_assistant_message(
+        workflow.stage = "complete"
+        workflow.latest_summary = "Build complete. The latest accepted revision is ready in the viewer and downloads."
+        await self._session_store.save_workflow(
             session_id,
-            final_response,
-            message_id=assistant_message_id,
+            workflow=workflow,
+            model_url=workflow.current_model_url,
+            downloads=workflow.downloads,
         )
+        await self._session_store.append_event(
+            session_id,
+            "progress_summary",
+            {"summary": workflow.latest_summary},
+        )
+        await self._emit_assistant_message(
+            session_id,
+            "Build complete. You can orbit the accepted revision, inspect the four renders, or ask for a revision and I'll regenerate from the updated brief.",
+        )
+
+    async def _emit_assistant_message(self, session_id: str, content: str) -> None:
+        message = await self._session_store.add_assistant_message(session_id, content)
+        if message is None:
+            return
         await self._session_store.append_event(
             session_id,
             "chat_token",
             {
-                "messageId": assistant_message_id,
+                "messageId": message.id,
                 "role": "assistant",
-                "delta": "",
+                "delta": content,
                 "complete": True,
             },
         )
-        await self._session_store.append_event(
-            session_id,
-            "progress_summary",
-            {
-                "summary": (
-                    "Phase 0 response completed. Assumption confirmation, step plans, and live "
-                    "CadQuery execution land in the next phase."
-                ),
-            },
-        )
+
+    @staticmethod
+    def _assumption_message(assumptions: list[str]) -> str:
+        bullets = "\n".join(f"- {assumption}" for assumption in assumptions)
+        return f"I've translated the brief into these working assumptions:\n{bullets}\n\nConfirm them and I'll publish the step plan."
 
 
 async def run_session_task(*, session_store: SessionStore, session_id: str, task: asyncio.Task[None]) -> None:

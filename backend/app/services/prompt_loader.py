@@ -19,3 +19,10 @@ class PromptLoader:
             self.load("main_interviewer.md"),
         ]
         return "\n\n".join(part for part in parts if part)
+
+    def build_role_prompt(self, prompt_name: str) -> str:
+        parts = [
+            self.load("shared_safety.md"),
+            self.load(prompt_name),
+        ]
+        return "\n\n".join(part for part in parts if part)
