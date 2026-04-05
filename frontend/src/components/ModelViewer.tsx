@@ -42,6 +42,7 @@ export function ModelViewer({
   const modelRef = useRef<Group | null>(null);
   const initializedCameraRef = useRef(false);
   const [status, setStatus] = useState("Waiting for accepted revision");
+  const hasDiagnostics = Boolean(modelUrl || massProperties || checkerReport || renderViews.length > 0 || downloads.length > 0);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -50,18 +51,18 @@ export function ModelViewer({
     }
 
     const scene = new Scene();
-    scene.background = new Color("#f1e7d8");
-    scene.add(new AmbientLight("#ffffff", 1.8));
+    scene.background = new Color("#161b1b");
+    scene.add(new AmbientLight("#ffffff", 1.55));
 
-    const keyLight = new DirectionalLight("#fff4dc", 2.1);
+    const keyLight = new DirectionalLight("#ffe6c5", 1.9);
     keyLight.position.set(5, 8, 10);
     scene.add(keyLight);
 
-    const fillLight = new DirectionalLight("#bfd8ff", 1.2);
+    const fillLight = new DirectionalLight("#b8e1d6", 0.95);
     fillLight.position.set(-8, 6, -6);
     scene.add(fillLight);
 
-    const grid = new GridHelper(18, 18, "#d1b598", "#e7d6c1");
+    const grid = new GridHelper(18, 18, "#38534a", "#24302e");
     grid.position.y = -1.1;
     scene.add(grid);
 
@@ -164,10 +165,10 @@ export function ModelViewer({
     <section className="viewer-panel">
       <header className="viewer-hero">
         <div className="viewer-hero-copy">
-          <p className="eyebrow">COCAD / Studio</p>
-          <h2>Accepted geometry only</h2>
+          <p className="eyebrow">COCAD</p>
+          <h2>Viewer</h2>
           <p className="viewer-subcopy">
-            The viewer swaps only when a revision passes the checker, so what you see is always the accepted state.
+            Only accepted revisions appear here.
           </p>
         </div>
         <div className="viewer-meta">
@@ -184,89 +185,91 @@ export function ModelViewer({
           </div>
         ) : null}
       </div>
-      <footer className="viewer-footer">
-        <section className="viewer-info-grid">
-          <article className="viewer-info-card">
-            <div className="card-row">
-              <div>
-                <p className="summary-label">Physics</p>
-                <h3>Mass properties</h3>
+      {hasDiagnostics ? (
+        <footer className="viewer-footer">
+          {(massProperties || checkerReport) ? (
+            <section className="viewer-info-grid">
+              {massProperties ? (
+                <article className="viewer-info-card">
+                  <div className="card-row">
+                    <div>
+                      <p className="summary-label">Physics</p>
+                      <h3>Mass properties</h3>
+                    </div>
+                  </div>
+                  <dl className="metric-list">
+                    <div>
+                      <dt>Volume</dt>
+                      <dd>{massProperties.volume_mm3.toFixed(1)} mm3</dd>
+                    </div>
+                    <div>
+                      <dt>Center</dt>
+                      <dd>
+                        {massProperties.center_of_mass_mm.map((value) => value.toFixed(1)).join(", ")} mm
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Bounding box</dt>
+                      <dd>
+                        {massProperties.bounding_box_mm.map((value) => value.toFixed(1)).join(" x ")} mm
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              ) : null}
+
+              {checkerReport ? (
+                <article className="viewer-info-card">
+                  <div className="card-row">
+                    <div>
+                      <p className="summary-label">Audit</p>
+                      <h3>Checker notes</h3>
+                    </div>
+                  </div>
+                  <p className={checkerReport.passed ? "status-live" : "status-idle"}>
+                    {checkerReport.summary}
+                  </p>
+                  <ul className="bullet-list bullet-list--compact">
+                    {checkerReport.notes.map((note) => (
+                      <li key={note}>{note}</li>
+                    ))}
+                  </ul>
+                </article>
+              ) : null}
+            </section>
+          ) : null}
+
+          {renderViews.length > 0 ? (
+            <section className="viewer-gallery">
+              <div className="card-row">
+                <div>
+                  <p className="summary-label">Review Frames</p>
+                  <h3>Render gallery</h3>
+                </div>
+                <span className="section-hint">{renderViews.length} views</span>
               </div>
-            </div>
-            {massProperties ? (
-              <dl className="metric-list">
-                <div>
-                  <dt>Volume</dt>
-                  <dd>{massProperties.volume_mm3.toFixed(1)} mm3</dd>
-                </div>
-                <div>
-                  <dt>Center</dt>
-                  <dd>
-                    {massProperties.center_of_mass_mm.map((value) => value.toFixed(1)).join(", ")} mm
-                  </dd>
-                </div>
-                <div>
-                  <dt>Bounding box</dt>
-                  <dd>
-                    {massProperties.bounding_box_mm.map((value) => value.toFixed(1)).join(" x ")} mm
-                  </dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="card-muted">Mass properties will appear after the first accepted revision.</p>
-            )}
-          </article>
-
-          <article className="viewer-info-card">
-            <div className="card-row">
-              <div>
-                <p className="summary-label">Audit</p>
-                <h3>Checker notes</h3>
+              <div className="gallery-grid">
+                {renderViews.map((view) => (
+                  <figure key={view.key} className="gallery-card">
+                    <img src={view.url} alt={view.label} loading="lazy" />
+                    <figcaption>{view.label}</figcaption>
+                  </figure>
+                ))}
               </div>
-            </div>
-            {checkerReport ? (
-              <>
-                <p className={checkerReport.passed ? "status-live" : "status-idle"}>
-                  {checkerReport.summary}
-                </p>
-                <ul className="bullet-list bullet-list--compact">
-                  {checkerReport.notes.map((note) => (
-                    <li key={note}>{note}</li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <p className="card-muted">Checker feedback appears after accepted revisions.</p>
-            )}
-          </article>
-        </section>
+            </section>
+          ) : null}
 
-        <section className="viewer-gallery">
-          <div className="card-row">
-            <div>
-              <p className="summary-label">Review Frames</p>
-              <h3>Render gallery</h3>
+          {downloads.length > 0 ? (
+            <div className="download-row">
+              {downloads.map((download) => (
+                <a key={download.label} className="download-button" href={download.url} target="_blank" rel="noreferrer">
+                  {download.label}
+                </a>
+              ))}
             </div>
-            <span className="section-hint">{renderViews.length} views</span>
-          </div>
-          <div className="gallery-grid">
-            {renderViews.map((view) => (
-              <figure key={view.key} className="gallery-card">
-                <img src={view.url} alt={view.label} loading="lazy" />
-                <figcaption>{view.label}</figcaption>
-              </figure>
-            ))}
-          </div>
-        </section>
-
-        <div className="download-row">
-          {downloads.map((download) => (
-            <a key={download.label} className="download-button" href={download.url} target="_blank" rel="noreferrer">
-              {download.label}
-            </a>
-          ))}
-        </div>
-      </footer>
+          ) : null}
+        </footer>
+      ) : null}
     </section>
   );
 }

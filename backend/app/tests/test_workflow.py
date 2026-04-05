@@ -91,6 +91,35 @@ def test_full_workflow_generates_accepted_revision(tmp_path: Path) -> None:
     assert model_response.status_code == 200
 
 
+def test_vase_brief_preserves_object_kind_and_height(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings=_settings(tmp_path)))
+    session_id = _create_session(client)
+
+    response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"message": "I want a vase"},
+    )
+    assert response.status_code == 200
+    _wait_for_stage(client, session_id, "interviewing")
+
+    response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"message": "Make it 5 inches tall"},
+    )
+    assert response.status_code == 200
+    snapshot = _wait_for_stage(client, session_id, "awaiting_confirmation")
+
+    assert snapshot["workflow"]["design_kind"] == "vase"
+    assert "vase" in snapshot["workflow"]["pending_assumptions"]["intent_summary"].lower()
+    assert any("127 mm tall" in assumption for assumption in snapshot["workflow"]["pending_assumptions"]["assumptions"])
+
+    response = client.post(f"/api/sessions/{session_id}/assumptions/confirm")
+    assert response.status_code == 200
+    completed = _wait_for_stage(client, session_id, "complete", timeout_seconds=20.0)
+    assert completed["model_url"]
+    assert all(step["status"] == "accepted" for step in completed["workflow"]["step_plan"])
+
+
 def test_safety_refusal_blocks_workflow(tmp_path: Path) -> None:
     client = TestClient(create_app(settings=_settings(tmp_path)))
     session_id = _create_session(client)

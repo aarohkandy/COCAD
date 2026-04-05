@@ -27,145 +27,32 @@ export function ChatPanel({
   onReset,
 }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
-  const conversationCount = timeline.filter((item) => item.kind === "message").length;
 
   return (
     <section className="chat-panel">
-      <header className="chat-hero">
-        <div className="chat-hero-copy">
-          <p className="eyebrow">COCAD / Conversation</p>
-          <h1>Describe the object. We&apos;ll shape it live.</h1>
-          <p className="hero-copy">
-            The agent asks only for the geometry-critical details, locks assumptions, then builds one accepted revision at a time.
-          </p>
+      <header className="chat-shell-header">
+        <div className="chat-shell-title">
+          <p className="eyebrow">COCAD</p>
+          <h1>Chat</h1>
         </div>
-        <div className="session-meta">
+        <div className="session-meta session-meta--minimal">
           <span className={`status-pill ${isStreaming ? "status-pill--live" : "status-pill--warning"}`}>
-            {isStreaming ? "stream connected" : "stream reconnecting"}
+            {isStreaming ? "live" : "reconnecting"}
           </span>
-          <span className="status-pill status-pill--ghost">{humanizeStage(workflow.stage)}</span>
           <button type="button" className="ghost-button" onClick={onReset}>
             New session
           </button>
         </div>
       </header>
 
-      <section className="summary-card summary-card--hero">
-        <div>
-          <p className="summary-label">Build Pulse</p>
-          <p className="summary-copy">{latestSummary}</p>
-        </div>
-        <div className="summary-stats">
-          <div>
-            <span>Stage</span>
-            <strong>{humanizeStage(workflow.stage)}</strong>
-          </div>
-          <div>
-            <span>Steps</span>
-            <strong>{workflow.step_plan.length}</strong>
-          </div>
-        </div>
-      </section>
+      <p className="chat-shell-summary">{latestSummary}</p>
 
-      <div className="insight-grid">
-        {workflow.pending_assumptions ? (
-          <section className="panel-section panel-section--accent">
-            <div className="card-row">
-              <div>
-                <p className="summary-label">Assumptions Waiting On You</p>
-                <h3>Confirm the design frame</h3>
-              </div>
-              <span className="status-pill status-pill--warning">{workflow.pending_assumptions.surface_units}</span>
-            </div>
-            <p className="card-muted">{workflow.pending_assumptions.intent_summary}</p>
-            <ul className="bullet-list">
-              {workflow.pending_assumptions.assumptions.map((assumption) => (
-                <li key={assumption}>{assumption}</li>
-              ))}
-            </ul>
-            <div className="panel-actions">
-              <span className="section-hint">Once confirmed, the step plan becomes the source of truth.</span>
-              {workflow.can_confirm_assumptions ? (
-                <button type="button" className="secondary-button" onClick={onConfirmAssumptions} disabled={isSending}>
-                  Confirm assumptions
-                </button>
-              ) : null}
-            </div>
-          </section>
-        ) : workflow.confirmed_assumptions ? (
-          <section className="panel-section panel-section--confirmed">
-            <div className="card-row">
-              <div>
-                <p className="summary-label">Locked Assumptions</p>
-                <h3>Build frame confirmed</h3>
-              </div>
-              <span className="status-pill status-pill--live">{workflow.confirmed_assumptions.surface_units}</span>
-            </div>
-            <ul className="bullet-list">
-              {workflow.confirmed_assumptions.assumptions.map((assumption) => (
-                <li key={assumption}>{assumption}</li>
-              ))}
-            </ul>
-          </section>
-        ) : (
-          <section className="panel-section panel-section--quiet">
-            <p className="summary-label">Interview Status</p>
-            <h3>Waiting for a clearer brief</h3>
-            <p className="card-muted">
-              Start with the object you want, then the agent will ask only for the geometry-critical details it cannot infer safely.
-            </p>
-          </section>
-        )}
-
-        <section className="panel-section panel-section--plan">
-          <div className="card-row">
-            <div>
-              <p className="summary-label">Step Plan</p>
-              <h3>Execution map</h3>
-            </div>
-            <span className="status-pill status-pill--ghost">{workflow.step_plan.length} steps</span>
-          </div>
-          {workflow.step_plan.length === 0 ? (
-            <div className="step-empty-state">
-              <span className="step-empty-index">01</span>
-              <p>The plan appears after assumptions are confirmed, then each accepted step flows into the viewer.</p>
-            </div>
-          ) : (
-            <div className="step-list">
-              {workflow.step_plan.map((step, index) => (
-                <article key={step.step_id} className={`step-item step-item--${step.status}`}>
-                  <div className="step-item-marker">{String(index + 1).padStart(2, "0")}</div>
-                  <div className="step-item-body">
-                    <div className="step-item-header">
-                      <div>
-                        <p className="step-index">{step.step_id}</p>
-                        <h4>{step.title}</h4>
-                      </div>
-                      <span className="step-status">{step.status.replace("_", " ")}</span>
-                    </div>
-                    <p className="card-muted">{step.description}</p>
-                    {workflow.current_step_id === step.step_id ? <p className="step-current">Currently building</p> : null}
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
-
-      <section className="conversation-section">
-        <div className="section-header">
-          <div>
-            <p className="summary-label">Conversation</p>
-            <h3>Live design thread</h3>
-          </div>
-          <span className="section-hint">{conversationCount} messages</span>
-        </div>
+      <section className="conversation-section conversation-section--plain">
         <div className="timeline">
           {timeline.length === 0 ? (
             <div className="timeline-empty-state">
-              <h3>Start the build</h3>
-              <p>Describe anything you want to make and the conversation will begin here.</p>
+              <h3>Start the conversation</h3>
+              <p>Describe the object you want to design.</p>
             </div>
           ) : null}
 
@@ -184,6 +71,29 @@ export function ChatPanel({
               <p>{item.body || (item.complete === false ? "..." : "")}</p>
             </article>
           ))}
+
+          {workflow.pending_assumptions ? (
+            <section className="chat-inline-card">
+              <div className="chat-inline-card-header">
+                <div>
+                  <p className="summary-label">Ready For Confirmation</p>
+                  <h3>Assumptions</h3>
+                </div>
+                <span className="status-pill status-pill--warning">{workflow.pending_assumptions.surface_units}</span>
+              </div>
+              <p className="card-muted">{workflow.pending_assumptions.intent_summary}</p>
+              <ul className="bullet-list">
+                {workflow.pending_assumptions.assumptions.map((assumption) => (
+                  <li key={assumption}>{assumption}</li>
+                ))}
+              </ul>
+              {workflow.can_confirm_assumptions ? (
+                <button type="button" className="secondary-button" onClick={onConfirmAssumptions} disabled={isSending}>
+                  Confirm assumptions
+                </button>
+              ) : null}
+            </section>
+          ) : null}
         </div>
       </section>
 
@@ -228,8 +138,4 @@ function presentTimelineTitle(item: TimelineCard): string {
     return "COCAD";
   }
   return item.title.replace(/_/g, " ");
-}
-
-function humanizeStage(stage: WorkflowSnapshot["stage"]): string {
-  return stage.replace(/_/g, " ");
 }

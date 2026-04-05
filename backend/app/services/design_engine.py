@@ -28,7 +28,7 @@ class DesignEngine:
         combined = " ".join(brief_messages).strip()
         combined_lower = combined.lower()
         kind = self._detect_kind(combined_lower)
-        parsed = self._parse_dimensions(brief_messages)
+        parsed = self._parse_dimensions(brief_messages, kind)
         dimensions_mm = {**self._default_dimensions(kind), **parsed["values"]}
         options = self._default_options(kind, combined_lower)
         options["specified_dimensions_count"] = len(parsed["values"])
@@ -53,6 +53,7 @@ class DesignEngine:
         prompts = {
             "hanging_planter": "What overall diameter and height should the hanging planter use, and do you want drainage holes?",
             "planter": "What overall diameter and height should the planter use, and do you want drainage holes?",
+            "vase": "What height and overall body width should the vase use, and do you want a narrow neck or a wider mouth?",
             "wall_shelf": "What width and depth should the shelf use, and is it light-duty or something more structural?",
             "enclosure_box": "What overall width, depth, and height should the enclosure use, and do you need any cable openings?",
             "hook": "What should the hook mount to, and roughly how deep or tall should it be?",
@@ -71,6 +72,12 @@ class DesignEngine:
             ]
             if spec.kind == "hanging_planter":
                 assumptions.append("Add three equidistant hanging lugs near the rim.")
+        elif spec.kind == "vase":
+            assumptions = [
+                f"Use a vase body about {dims['height']:.0f} mm tall and {dims['diameter']:.0f} mm wide at its broadest point.",
+                f"Keep it as one hollow solid with an open top, roughly {dims['wall']:.0f} mm walls, and a stable base around {dims['base_diameter']:.0f} mm wide.",
+                "Use a gentle neck transition so it reads clearly as a vase instead of a planter or storage cup.",
+            ]
         elif spec.kind == "wall_shelf":
             assumptions = [
                 f"Use a shelf plate about {dims['width']:.0f} mm wide and {dims['depth']:.0f} mm deep.",
@@ -105,6 +112,7 @@ class DesignEngine:
         generators = {
             "hanging_planter": self._plan_hanging_planter,
             "planter": self._plan_planter,
+            "vase": self._plan_vase,
             "wall_shelf": self._plan_wall_shelf,
             "enclosure_box": self._plan_enclosure_box,
             "hook": self._plan_hook,
@@ -139,6 +147,8 @@ class DesignEngine:
             return "hanging_planter"
         if any(keyword in text for keyword in ("planter", "flower pot", "pot")):
             return "planter"
+        if any(keyword in text for keyword in ("vase", "flower vase", "decorative vase")):
+            return "vase"
         if any(keyword in text for keyword in ("shelf", "bracket")):
             return "wall_shelf"
         if any(keyword in text for keyword in ("enclosure", "case", "box")):
@@ -151,6 +161,7 @@ class DesignEngine:
         return {
             "hanging_planter": "Hanging Planter",
             "planter": "Planter",
+            "vase": "Vase",
             "wall_shelf": "Wall Shelf",
             "enclosure_box": "Enclosure Box",
             "hook": "Hook",
@@ -161,6 +172,7 @@ class DesignEngine:
         return {
             "hanging_planter": {"diameter": 200.0, "height": 160.0, "wall": 5.0},
             "planter": {"diameter": 180.0, "height": 150.0, "wall": 5.0},
+            "vase": {"diameter": 96.0, "height": 180.0, "wall": 4.0, "neck_diameter": 58.0, "mouth_diameter": 74.0, "base_diameter": 82.0},
             "wall_shelf": {"width": 320.0, "depth": 180.0, "thickness": 18.0, "back_height": 120.0},
             "enclosure_box": {"width": 180.0, "depth": 120.0, "height": 80.0, "wall": 4.0},
             "hook": {"width": 70.0, "height": 120.0, "depth": 60.0, "thickness": 12.0},
@@ -171,33 +183,74 @@ class DesignEngine:
         options: dict[str, Any] = {}
         if kind in {"planter", "hanging_planter"}:
             options["drainage_holes"] = "no drainage" not in text and "without drainage" not in text
+        if kind == "vase":
+            options["narrow_neck"] = "wide mouth" not in text and "wide opening" not in text
         return options
 
-    def _parse_dimensions(self, messages: list[str]) -> dict[str, Any]:
+    def _parse_dimensions(self, messages: list[str], kind: str) -> dict[str, Any]:
         combined = " ".join(messages)
         surface_units = "millimeters"
         pattern = re.compile(
             r"(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>mm|millimeters?|cm|centimeters?|m|meters?|in|inch|inches|\")",
             re.IGNORECASE,
         )
-        measurements: list[tuple[float, str]] = []
+        measurements: list[tuple[float, str, str]] = []
         for match in pattern.finditer(combined):
             unit = match.group("unit").lower()
-            measurements.append((float(match.group("value")) * _UNIT_TO_MM[unit], unit))
+            start = max(0, match.start() - 24)
+            end = min(len(combined), match.end() + 24)
+            context = combined[start:end].lower()
+            measurements.append((float(match.group("value")) * _UNIT_TO_MM[unit], unit, context))
         if measurements:
             first_unit = measurements[0][1]
             surface_units = "inches" if first_unit in {"in", "inch", "inches", "\""} else first_unit
-        ordered = [entry[0] for entry in measurements]
         values: dict[str, float] = {}
-        if ordered:
-            values["width"] = ordered[0]
-            values["diameter"] = ordered[0]
-        if len(ordered) > 1:
-            values["depth"] = ordered[1]
-            values["height"] = ordered[1]
-        if len(ordered) > 2:
-            values["height"] = ordered[2]
+        unassigned: list[float] = []
+        for value_mm, _, context in measurements:
+            key = self._dimension_key_from_context(kind, context)
+            if key and key not in values:
+                values[key] = value_mm
+            else:
+                unassigned.append(value_mm)
+
+        for fallback_key, fallback_value in zip(self._fallback_dimension_order(kind), unassigned, strict=False):
+            values.setdefault(fallback_key, fallback_value)
         return {"values": values, "surface_units": surface_units}
+
+    def _dimension_key_from_context(self, kind: str, context: str) -> str | None:
+        rotational = kind in {"hanging_planter", "planter", "vase"}
+
+        if any(token in context for token in ("tall", "height", "high")):
+            return "height"
+        if any(token in context for token in ("deep", "depth", "projection")):
+            return "depth"
+        if any(token in context for token in ("thick", "thickness")):
+            return "wall" if rotational else "thickness"
+        if "wall" in context and rotational:
+            return "wall"
+        if kind == "vase" and "base" in context and any(token in context for token in ("diameter", "wide", "width")):
+            return "base_diameter"
+        if kind == "vase" and any(token in context for token in ("mouth", "opening", "rim", "neck")):
+            return "mouth_diameter" if any(token in context for token in ("mouth", "opening", "rim")) else "neck_diameter"
+        if any(token in context for token in ("diameter", "across")):
+            return "diameter" if rotational else "width"
+        if any(token in context for token in ("wide", "width", "long", "length")):
+            return "diameter" if rotational else "width"
+        return None
+
+    @staticmethod
+    def _fallback_dimension_order(kind: str) -> tuple[str, ...]:
+        if kind in {"hanging_planter", "planter"}:
+            return ("diameter", "height", "wall")
+        if kind == "vase":
+            return ("height", "diameter", "mouth_diameter")
+        if kind == "hook":
+            return ("height", "depth", "width")
+        if kind == "wall_shelf":
+            return ("width", "depth", "back_height")
+        if kind == "enclosure_box":
+            return ("width", "depth", "height")
+        return ("width", "depth", "height")
 
     @staticmethod
     def _step(step_id: str, description: str) -> StepPlanItem:
@@ -230,6 +283,24 @@ class DesignEngine:
             "step_001": f'''def step_001(state):\n    """{steps[0].description}"""\n    outer = cq.Workplane("XY").circle({d["diameter"]/2:.3f}).extrude({d["height"]:.3f})\n    inner = cq.Workplane("XY").workplane(offset={d["wall"]:.3f}).circle({d["diameter"]/2 - d["wall"]:.3f}).extrude({d["height"] - d["wall"]:.3f})\n    solid = outer.cut(inner)\n    state["solid"] = solid\n    state["parts"] = {{"body": solid.val()}}\n    return state\n''',
             "step_002": f'''def step_002(state):\n    """{steps[1].description}"""\n    points = [(0, 0), ({d["diameter"]*0.18:.3f}, 0), ({-d["diameter"]*0.09:.3f}, {d["diameter"]*0.16:.3f})]\n    solid = state["solid"].faces("<Z").workplane().pushPoints(points).hole(8.0)\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
             "step_003": f'''def step_003(state):\n    """{steps[2].description}"""\n    outer_band = cq.Workplane("XY").transformed(offset=(0, 0, {d["height"] - 8:.3f})).circle({d["diameter"]/2 + 3:.3f}).extrude(8.0)\n    inner_band = cq.Workplane("XY").transformed(offset=(0, 0, {d["height"] - 8:.3f})).circle({d["diameter"]/2 - d["wall"]:.3f}).extrude(8.0)\n    rim_band = outer_band.cut(inner_band)\n    solid = state["solid"].union(rim_band)\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
+        }
+        return steps, code
+
+    def _plan_vase(self, spec: DesignSpec) -> tuple[list[StepPlanItem], dict[str, str]]:
+        d = spec.dimensions_mm
+        body_radius = d["diameter"] / 2
+        base_radius = d["base_diameter"] / 2
+        neck_radius = d["neck_diameter"] / 2
+        mouth_radius = d["mouth_diameter"] / 2
+        steps = [
+            self._step("step_001", f"Create the outer vase silhouette, about {d['height']:.0f} mm tall and {d['diameter']:.0f} mm wide."),
+            self._step("step_002", "Hollow the vase from the top so it becomes an open vessel with consistent walls."),
+            self._step("step_003", "Add a subtle base ring and soften the mouth so the form reads as a finished vase."),
+        ]
+        code = {
+            "step_001": f'''def step_001(state):\n    """{steps[0].description}"""\n    outer = (cq.Workplane("XY")\n        .circle({base_radius:.3f})\n        .workplane(offset={d["height"] * 0.28:.3f}).circle({body_radius * 0.96:.3f})\n        .workplane(offset={d["height"] * 0.30:.3f}).circle({body_radius:.3f})\n        .workplane(offset={d["height"] * 0.24:.3f}).circle({neck_radius:.3f})\n        .workplane(offset={d["height"] * 0.18:.3f}).circle({mouth_radius:.3f})\n        .loft(combine=True))\n    state["solid"] = outer\n    state["parts"] = {{"body": outer.val()}}\n    return state\n''',
+            "step_002": f'''def step_002(state):\n    """{steps[1].description}"""\n    solid = state["solid"].faces(">Z").shell(-{d["wall"]:.3f})\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
+            "step_003": f'''def step_003(state):\n    """{steps[2].description}"""\n    base_ring = (cq.Workplane("XY")\n        .circle({base_radius + 4:.3f})\n        .circle({base_radius - 2:.3f})\n        .extrude(6.0))\n    lip = (cq.Workplane("XY")\n        .transformed(offset=(0, 0, {d["height"] - 4:.3f}))\n        .circle({mouth_radius + 2:.3f})\n        .circle({mouth_radius - d["wall"] * 0.6:.3f})\n        .extrude(4.0))\n    solid = state["solid"].union(base_ring).union(lip)\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
         }
         return steps, code
 
