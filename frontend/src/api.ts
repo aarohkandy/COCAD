@@ -49,8 +49,12 @@ export function confirmAssumptions(sessionId: string): Promise<{ queued: boolean
   });
 }
 
-export function createEventSource(sessionId: string): EventSource {
-  return new EventSource(`${API_BASE_URL}/api/sessions/${sessionId}/events`);
+export function createEventSource(sessionId: string, lastEventId?: string | null): EventSource {
+  const url = new URL(`${API_BASE_URL}/api/sessions/${sessionId}/events`);
+  if (lastEventId) {
+    url.searchParams.set("last_event_id", lastEventId);
+  }
+  return new EventSource(url);
 }
 
 export function writeStoredGate(value: StoredSessionGate): void {

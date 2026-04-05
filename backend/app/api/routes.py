@@ -91,7 +91,7 @@ async def confirm_assumptions(session_id: str, request: Request) -> ConfirmAssum
 async def stream_session_events(session_id: str, request: Request) -> StreamingResponse:
     listener = await _get_store(request).register_listener(
         session_id,
-        last_event_id=request.headers.get("Last-Event-ID"),
+        last_event_id=request.headers.get("Last-Event-ID") or request.query_params.get("last_event_id"),
     )
     if listener is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found.")

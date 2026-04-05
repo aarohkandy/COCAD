@@ -34,9 +34,9 @@ export function ChatPanel({
       <header className="chat-hero">
         <div className="chat-hero-copy">
           <p className="eyebrow">COCAD / Conversation</p>
-          <h1>Describe the object. We&apos;ll shape the details together.</h1>
+          <h1>Describe the object. We&apos;ll shape it live.</h1>
           <p className="hero-copy">
-            The agent only asks what it truly needs, locks assumptions, then builds into the live viewer one accepted revision at a time.
+            The agent asks only for the geometry-critical details, locks assumptions, then builds one accepted revision at a time.
           </p>
         </div>
         <div className="session-meta">

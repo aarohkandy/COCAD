@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 
 import {
   clearStoredGate,
@@ -37,12 +37,14 @@ const EVENT_TYPES: EventType[] = [
 function App() {
   const [state, dispatch] = useReducer(appReducer, initialState);
   const [isBootstrappingSession, setIsBootstrappingSession] = useState(false);
+  const lastEventIdRef = useRef<string | null>(null);
 
   const bootstrapSession = async () => {
     dispatch({ type: "error", message: null });
     setIsBootstrappingSession(true);
     try {
       const snapshot = await createSession();
+      lastEventIdRef.current = snapshot.events.at(-1)?.id ?? null;
       writeStoredGate({
         sessionId: snapshot.session_id,
         claimId: "",
@@ -69,7 +71,10 @@ function App() {
     }
 
     hydrateSession(storedGate.sessionId)
-      .then((snapshot) => dispatch({ type: "sessionLoaded", snapshot }))
+      .then((snapshot) => {
+        lastEventIdRef.current = snapshot.events.at(-1)?.id ?? null;
+        dispatch({ type: "sessionLoaded", snapshot });
+      })
       .catch(() => {
         clearStoredGate();
         void bootstrapSession();
@@ -81,11 +86,13 @@ function App() {
       return;
     }
 
-    const source = createEventSource(state.sessionId);
+    const source = createEventSource(state.sessionId, lastEventIdRef.current);
 
     const handleEvent = (rawEvent: Event) => {
       const event = rawEvent as MessageEvent<string>;
-      dispatch({ type: "eventReceived", event: mapLiveEvent(event.data) });
+      const parsed = mapLiveEvent(event.data);
+      lastEventIdRef.current = parsed.id;
+      dispatch({ type: "eventReceived", event: parsed });
     };
 
     EVENT_TYPES.forEach((eventType) => source.addEventListener(eventType, handleEvent));
