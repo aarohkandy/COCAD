@@ -1,7 +1,6 @@
 import { useEffect, useReducer, useState } from "react";
 
 import {
-  claimInvite,
   clearStoredGate,
   confirmAssumptions,
   createEventSource,
@@ -13,10 +12,9 @@ import {
   writeStoredGate,
 } from "./api";
 import { ChatPanel } from "./components/ChatPanel";
-import { GateScreen } from "./components/GateScreen";
 import { ModelViewer } from "./components/ModelViewer";
 import { appReducer, initialState } from "./reducer";
-import type { EventType, GateFormValues } from "./types";
+import type { EventType } from "./types";
 
 const EVENT_TYPES: EventType[] = [
   "chat_token",
@@ -38,12 +36,35 @@ const EVENT_TYPES: EventType[] = [
 
 function App() {
   const [state, dispatch] = useReducer(appReducer, initialState);
-  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [isBootstrappingSession, setIsBootstrappingSession] = useState(false);
+
+  const bootstrapSession = async () => {
+    dispatch({ type: "error", message: null });
+    setIsBootstrappingSession(true);
+    try {
+      const snapshot = await createSession();
+      writeStoredGate({
+        sessionId: snapshot.session_id,
+        claimId: "",
+        email: snapshot.email,
+        inviteCode: snapshot.invite_code,
+      });
+      dispatch({ type: "sessionLoaded", snapshot });
+    } catch (error) {
+      dispatch({
+        type: "error",
+        message: error instanceof Error ? error.message : "Failed to start session",
+      });
+      dispatch({ type: "bootstrapComplete" });
+    } finally {
+      setIsBootstrappingSession(false);
+    }
+  };
 
   useEffect(() => {
     const storedGate = readStoredGate();
     if (!storedGate) {
-      dispatch({ type: "bootstrapComplete" });
+      void bootstrapSession();
       return;
     }
 
@@ -51,7 +72,7 @@ function App() {
       .then((snapshot) => dispatch({ type: "sessionLoaded", snapshot }))
       .catch(() => {
         clearStoredGate();
-        dispatch({ type: "bootstrapComplete" });
+        void bootstrapSession();
       });
   }, []);
 
@@ -77,29 +98,6 @@ function App() {
       dispatch({ type: "streamClosed" });
     };
   }, [state.sessionId]);
-
-  const handleSessionCreate = async (values: GateFormValues) => {
-    dispatch({ type: "error", message: null });
-    setIsCreatingSession(true);
-    try {
-      const claim = await claimInvite(values);
-      const snapshot = await createSession(claim.claim_id);
-      writeStoredGate({
-        sessionId: snapshot.session_id,
-        claimId: claim.claim_id,
-        email: values.email,
-        inviteCode: values.inviteCode,
-      });
-      dispatch({ type: "sessionLoaded", snapshot });
-    } catch (error) {
-      dispatch({
-        type: "error",
-        message: error instanceof Error ? error.message : "Failed to start session",
-      });
-    } finally {
-      setIsCreatingSession(false);
-    }
-  };
 
   const handleSend = async (message: string) => {
     if (!state.sessionId) {
@@ -138,21 +136,20 @@ function App() {
   const handleReset = () => {
     clearStoredGate();
     dispatch({ type: "reset" });
+    void bootstrapSession();
   };
 
-  if (!state.bootstrapped) {
-    return <main className="gate-shell">Loading session...</main>;
-  }
-
-  if (!state.sessionId) {
-    return <GateScreen onSubmit={handleSessionCreate} disabled={isCreatingSession} error={state.error} />;
+  if (!state.bootstrapped || !state.sessionId) {
+    return (
+      <main className="gate-shell">
+        {isBootstrappingSession ? "Opening workspace..." : state.error ?? "Loading session..."}
+      </main>
+    );
   }
 
   return (
     <main className="app-shell">
       <ChatPanel
-        email={state.email}
-        inviteCode={state.inviteCode}
         latestSummary={state.latestSummary}
         workflow={state.workflow}
         timeline={state.timeline}

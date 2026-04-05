@@ -20,6 +20,18 @@ def test_invite_claim_rejects_unknown_code(tmp_path: Path) -> None:
     assert response.status_code == 403
 
 
+def test_create_session_without_invite_claim(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings=_settings(tmp_path)))
+
+    response = client.post("/api/sessions", json={})
+
+    assert response.status_code == 201
+    snapshot = response.json()
+    assert snapshot["email"] == "guest@cocad.app"
+    assert snapshot["invite_code"] == "BYPASS"
+    assert snapshot["workflow"]["stage"] == "waiting_for_brief"
+
+
 def test_full_workflow_generates_accepted_revision(tmp_path: Path) -> None:
     client = TestClient(create_app(settings=_settings(tmp_path)))
     session_id = _create_session(client)

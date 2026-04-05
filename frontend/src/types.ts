@@ -92,11 +92,6 @@ export interface InviteClaimResponse {
   invite_code: string;
 }
 
-export interface GateFormValues {
-  email: string;
-  inviteCode: string;
-}
-
 export interface StoredSessionGate {
   sessionId: string;
   claimId: string;

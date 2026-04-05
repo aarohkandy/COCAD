@@ -1,4 +1,4 @@
-import type { GateFormValues, InviteClaimResponse, SessionSnapshot, StoredSessionGate, StreamEvent } from "./types";
+import type { SessionSnapshot, StoredSessionGate, StreamEvent } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
 export const SESSION_STORAGE_KEY = "cocad.session";
@@ -20,20 +20,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function claimInvite(values: GateFormValues): Promise<InviteClaimResponse> {
-  return request<InviteClaimResponse>("/api/invite/claim", {
-    method: "POST",
-    body: JSON.stringify({
-      email: values.email,
-      invite_code: values.inviteCode,
-    }),
-  });
-}
-
-export function createSession(claimId: string): Promise<SessionSnapshot> {
+export function createSession(claimId?: string): Promise<SessionSnapshot> {
   return request<SessionSnapshot>("/api/sessions", {
     method: "POST",
-    body: JSON.stringify({ claim_id: claimId }),
+    body: JSON.stringify(claimId ? { claim_id: claimId } : {}),
   });
 }
 

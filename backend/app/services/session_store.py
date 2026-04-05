@@ -81,20 +81,27 @@ class SessionStore:
             self._connection.commit()
             return InviteClaimResponse(claim_id=claim_id, email=email, invite_code=invite_code)
 
-    async def create_session(self, *, claim_id: str, api_root: str) -> SessionSnapshot | None:
+    async def create_session(self, *, claim_id: str | None, api_root: str) -> SessionSnapshot | None:
         async with self._lock:
-            claim = self._connection.execute(
-                "SELECT email, invite_code FROM invite_claims WHERE claim_id = ?",
-                (claim_id,),
-            ).fetchone()
-            if claim is None:
-                return None
-
             session_id = uuid4().hex
             now = datetime.now(UTC).isoformat()
+            email = "guest@cocad.app"
+            invite_code = "BYPASS"
+            resolved_claim_id = claim_id or f"guest-{session_id}"
+
+            if claim_id is not None:
+                claim = self._connection.execute(
+                    "SELECT email, invite_code FROM invite_claims WHERE claim_id = ?",
+                    (claim_id,),
+                ).fetchone()
+                if claim is None:
+                    return None
+                email = claim["email"]
+                invite_code = claim["invite_code"]
+
             workflow = WorkflowState(
                 stage="waiting_for_brief",
-                latest_summary="Invite accepted. Share the object you want to design and I will interview for anything essential before building.",
+                latest_summary="Share the object you want to design and I will interview for anything essential before building.",
                 api_root=api_root,
             )
             self._connection.execute(
@@ -105,9 +112,9 @@ class SessionStore:
                 """,
                 (
                     session_id,
-                    claim_id,
-                    claim["email"],
-                    claim["invite_code"],
+                    resolved_claim_id,
+                    email,
+                    invite_code,
                     None,
                     "[]",
                     workflow.model_dump_json(),

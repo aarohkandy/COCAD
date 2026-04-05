@@ -4,8 +4,6 @@ import { formatTimestamp, toneClassName } from "../reducer";
 import type { TimelineCard, WorkflowSnapshot } from "../types";
 
 interface ChatPanelProps {
-  email: string;
-  inviteCode: string;
   latestSummary: string;
   workflow: WorkflowSnapshot;
   timeline: TimelineCard[];
@@ -18,8 +16,6 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({
-  email,
-  inviteCode,
   latestSummary,
   workflow,
   timeline,
@@ -40,8 +36,7 @@ export function ChatPanel({
           <h2>Design Conversation</h2>
         </div>
         <div className="session-meta">
-          <span>{email}</span>
-          <span>{inviteCode}</span>
+          <span>Live workspace</span>
           <button type="button" className="ghost-button" onClick={onReset}>
             Reset
           </button>

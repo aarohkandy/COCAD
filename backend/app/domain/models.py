@@ -152,7 +152,7 @@ class InviteClaimResponse(BaseModel):
 class CreateSessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    claim_id: str = Field(min_length=1)
+    claim_id: str | None = Field(default=None, min_length=1)
 
 
 class MessageRequest(BaseModel):

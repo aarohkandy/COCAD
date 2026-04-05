@@ -47,8 +47,10 @@ async def create_session(payload: CreateSessionRequest, request: Request) -> Ses
     settings = request.app.state.settings
     api_root = f"{str(request.base_url).rstrip('/')}{settings.api_prefix}"
     session = await _get_store(request).create_session(claim_id=payload.claim_id, api_root=api_root)
-    if session is None:
+    if session is None and payload.claim_id is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite claim not found.")
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unable to create session.")
     return session
 
 
