@@ -179,6 +179,7 @@ def _wait_for_stage(
 
 
 def _settings(tmp_path: Path) -> Settings:
+    prompt_dir = Path(__file__).resolve().parents[2] / "prompts"
     return Settings(
         app_name="COCAD Backend Test",
         app_env="test",
@@ -191,7 +192,7 @@ def _settings(tmp_path: Path) -> Settings:
         llm_checker_model="qwen2.5:14b",
         valid_invite_codes=("PHASE1",),
         safety_blocklist=("weapon", "firearm", "suppressor", "bomb"),
-        prompt_dir=tmp_path / "prompts",
+        prompt_dir=prompt_dir,
         artifact_dir=tmp_path / "artifacts",
         database_path=tmp_path / "data" / "test.sqlite3",
     )

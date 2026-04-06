@@ -15,6 +15,9 @@ class ImageInput:
 
 
 class StreamingChatProvider(Protocol):
+    async def list_models(self) -> list[str]:
+        """Return the list of model identifiers currently available."""
+
     async def stream_chat(
         self,
         *,

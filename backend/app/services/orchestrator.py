@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from app.domain.models import WorkflowState
 from app.services.cad_service import CadService
+from app.services.design_brain import DesignBrain
 from app.services.design_engine import DesignEngine
 from app.services.safety import SafetyService
 from app.services.session_store import SessionStore
@@ -18,11 +19,13 @@ class WorkflowOrchestrator:
         *,
         session_store: SessionStore,
         design_engine: DesignEngine,
+        design_brain: DesignBrain,
         cad_service: CadService,
         safety_service: SafetyService,
     ) -> None:
         self._session_store = session_store
         self._design_engine = design_engine
+        self._design_brain = design_brain
         self._cad_service = cad_service
         self._safety_service = safety_service
 
@@ -83,16 +86,18 @@ class WorkflowOrchestrator:
 
     async def _handle_prebuild_message(self, *, session_id: str, workflow: WorkflowState, message_text: str) -> None:
         workflow.brief_messages.append(message_text)
-        spec = self._design_engine.build_spec(workflow.brief_messages)
+        spec, assumptions, question = await self._design_brain.analyze_brief(
+            brief_messages=workflow.brief_messages,
+            interview_rounds=workflow.interview_rounds,
+        )
         workflow.draft_spec = spec
         workflow.design_kind = spec.kind
 
-        if workflow.stage != "awaiting_confirmation" and self._design_engine.needs_clarification(spec, workflow.interview_rounds):
+        if workflow.stage != "awaiting_confirmation" and question:
             workflow.stage = "interviewing"
             workflow.interview_rounds += 1
             workflow.latest_summary = "Collecting one required clarification before assumptions are locked."
             await self._session_store.save_workflow(session_id, workflow=workflow)
-            question = self._design_engine.interview_question(spec)
             await self._session_store.append_event(session_id, "interview_question", {"question": question})
             await self._session_store.append_event(
                 session_id,
@@ -102,7 +107,7 @@ class WorkflowOrchestrator:
             await self._emit_assistant_message(session_id, question)
             return
 
-        workflow.pending_assumptions = self._design_engine.build_assumptions(spec)
+        workflow.pending_assumptions = assumptions
         workflow.stage = "awaiting_confirmation"
         workflow.latest_summary = "Assumptions are ready for confirmation."
         await self._session_store.save_workflow(session_id, workflow=workflow)
@@ -125,10 +130,13 @@ class WorkflowOrchestrator:
 
     async def _handle_revision_message(self, *, session_id: str, workflow: WorkflowState, message_text: str) -> None:
         workflow.brief_messages.append(message_text)
-        spec = self._design_engine.build_spec(workflow.brief_messages)
+        spec, assumptions, _ = await self._design_brain.analyze_brief(
+            brief_messages=workflow.brief_messages,
+            interview_rounds=workflow.interview_rounds,
+        )
         workflow.draft_spec = spec
         workflow.design_kind = spec.kind
-        workflow.confirmed_assumptions = self._design_engine.build_assumptions(spec)
+        workflow.confirmed_assumptions = assumptions
         workflow.pending_assumptions = None
         workflow.latest_summary = "Revision request received. Replanning and rebuilding from the updated brief."
         workflow.stage = "planning"
@@ -155,7 +163,7 @@ class WorkflowOrchestrator:
         if spec is None or assumptions is None:
             return
 
-        step_plan, step_code = self._design_engine.generate_plan(spec)
+        step_plan, step_code = await self._design_brain.generate_plan(spec=spec, assumptions=assumptions)
         workflow.step_plan = step_plan
         workflow.step_code = step_code
         workflow.stage = "planning"
@@ -222,10 +230,46 @@ class WorkflowOrchestrator:
                 await self._emit_assistant_message(session_id, f"{step.step_id} failed to execute cleanly: {exc}")
                 return
 
+            checker_report = await self._design_brain.audit_revision(
+                spec=spec,
+                assumptions=assumptions,
+                step=step,
+                step_code=workflow.step_code[step.step_id],
+                render_files=artifacts.render_files,
+                mass_properties=artifacts.mass_properties,
+                interference_relevant=artifacts.interference_relevant,
+                interference_detected=artifacts.interference_detected,
+            )
+            if not checker_report.passed:
+                step.status = "failed"
+                workflow.stage = "blocked"
+                workflow.checker_report = checker_report
+                workflow.latest_summary = f"{step.step_id} failed checker review and was not promoted."
+                await self._session_store.save_workflow(session_id, workflow=workflow)
+                await self._session_store.append_event(
+                    session_id,
+                    "step_checker_failed",
+                    {
+                        "step": step.model_dump(),
+                        "summary": checker_report.summary,
+                        "notes": checker_report.notes,
+                    },
+                )
+                await self._session_store.append_event(
+                    session_id,
+                    "progress_summary",
+                    {"summary": workflow.latest_summary},
+                )
+                await self._emit_assistant_message(
+                    session_id,
+                    f"{step.step_id} was rejected by the checker: {checker_report.summary}",
+                )
+                return
+
             step.status = "accepted"
             workflow.render_views = artifacts.render_views
             workflow.mass_properties = artifacts.mass_properties
-            workflow.checker_report = artifacts.checker_report
+            workflow.checker_report = checker_report
             workflow.current_revision_label = artifacts.revision_label
             workflow.current_model_url = artifacts.model_url
             workflow.downloads = artifacts.downloads
@@ -243,7 +287,7 @@ class WorkflowOrchestrator:
                     "step": step.model_dump(),
                     "renderViews": [view.model_dump() for view in artifacts.render_views],
                     "massProperties": artifacts.mass_properties.model_dump(),
-                    "checker": artifacts.checker_report.model_dump(),
+                    "checker": checker_report.model_dump(),
                     "revisionLabel": artifacts.revision_label,
                 },
             )

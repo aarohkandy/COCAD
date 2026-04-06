@@ -298,20 +298,18 @@ class DesignEngine:
         has_handle = bool(spec.options.get("has_handle"))
 
         steps = [
-            self._step("step_001", f"Create the outer cup silhouette, about {d['height']:.0f} mm tall with an opening around {d['diameter']:.0f} mm wide."),
-            self._step("step_002", "Hollow the cup from the top so it becomes an open drinking vessel with consistent walls."),
-            self._step("step_003", "Add a subtle lip ring and stable base so the cup reads as finished tableware."),
+            self._step("step_001", f"Create the main hollow cup body, about {d['height']:.0f} mm tall with an opening around {d['diameter']:.0f} mm wide."),
+            self._step("step_002", "Add a pronounced foot ring and a subtle rolled lip so the cup sits confidently and reads as finished tableware."),
         ]
         code = {
-            "step_001": f'''def step_001(state):\n    """{steps[0].description}"""\n    outer = (cq.Workplane("XY")\n        .circle({base_radius:.3f})\n        .workplane(offset={d["height"] * 0.58:.3f}).circle({body_radius * 0.96:.3f})\n        .workplane(offset={d["height"] * 0.42:.3f}).circle({lip_radius:.3f})\n        .loft(combine=True))\n    state["solid"] = outer\n    state["parts"] = {{"body": outer.val()}}\n    return state\n''',
-            "step_002": f'''def step_002(state):\n    """{steps[1].description}"""\n    solid = state["solid"].faces(">Z").shell(-{d["wall"]:.3f})\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
-            "step_003": f'''def step_003(state):\n    """{steps[2].description}"""\n    base_ring = (cq.Workplane("XY")\n        .circle({base_radius + 2.5:.3f})\n        .circle({max(base_radius - 3.0, 4.0):.3f})\n        .extrude(4.0))\n    lip = (cq.Workplane("XY")\n        .transformed(offset=(0, 0, {d["height"] - 3:.3f}))\n        .circle({lip_radius + 1.5:.3f})\n        .circle({max(lip_radius - d["wall"] * 0.45, 4.0):.3f})\n        .extrude(3.0))\n    solid = state["solid"].union(base_ring).union(lip)\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
+            "step_001": f'''def step_001(state):\n    """{steps[0].description}"""\n    outer = (cq.Workplane("XY")\n        .circle({base_radius:.3f})\n        .workplane(offset={d["height"] * 0.58:.3f}).circle({body_radius * 0.96:.3f})\n        .workplane(offset={d["height"] * 0.42:.3f}).circle({lip_radius:.3f})\n        .loft(combine=True))\n    solid = outer.faces(">Z").shell(-{d["wall"]:.3f})\n    state["solid"] = solid\n    state["parts"] = {{"body": solid.val()}}\n    return state\n''',
+            "step_002": f'''def step_002(state):\n    """{steps[1].description}"""\n    base_ring = (cq.Workplane("XY")\n        .circle({base_radius + 5.0:.3f})\n        .circle({max(base_radius - 6.0, 6.0):.3f})\n        .extrude(7.0))\n    lip = (cq.Workplane("XY")\n        .transformed(offset=(0, 0, {d["height"] - 3:.3f}))\n        .circle({lip_radius + 1.8:.3f})\n        .circle({max(lip_radius - d["wall"] * 0.35, 4.0):.3f})\n        .extrude(3.5))\n    solid = state["solid"].union(base_ring).union(lip)\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
         }
 
         if has_handle:
-            handle_step = self._step("step_004", "Add an integrated side handle so the cup reads as a mug.")
+            handle_step = self._step("step_003", "Add an integrated side handle so the cup reads as a mug.")
             steps.append(handle_step)
-            code["step_004"] = f'''def step_004(state):\n    """{handle_step.description}"""\n    handle = (cq.Workplane("YZ")\n        .center({d["diameter"]/2 + d["handle_span"] * 0.35:.3f}, {d["height"] * 0.52:.3f})\n        .rect(18.0, {d["handle_span"]:.3f})\n        .offset2D(6.0)\n        .extrude(8.0, both=True))\n    solid = state["solid"].union(handle)\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n'''
+            code["step_003"] = f'''def step_003(state):\n    """{handle_step.description}"""\n    handle = (cq.Workplane("YZ")\n        .center({d["diameter"]/2 + d["handle_span"] * 0.35:.3f}, {d["height"] * 0.52:.3f})\n        .rect(18.0, {d["handle_span"]:.3f})\n        .offset2D(6.0)\n        .extrude(8.0, both=True))\n    solid = state["solid"].union(handle)\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n'''
 
         return steps, code
 
@@ -336,14 +334,14 @@ class DesignEngine:
         neck_radius = d["neck_diameter"] / 2
         mouth_radius = d["mouth_diameter"] / 2
         steps = [
-            self._step("step_001", f"Create the outer vase silhouette, about {d['height']:.0f} mm tall and {d['diameter']:.0f} mm wide."),
-            self._step("step_002", "Hollow the vase from the top so it becomes an open vessel with consistent walls."),
-            self._step("step_003", "Add a subtle base ring and soften the mouth so the form reads as a finished vase."),
+            self._step("step_001", f"Create the main hollow vase body, about {d['height']:.0f} mm tall and {d['diameter']:.0f} mm wide."),
+            self._step("step_002", "Add a subtle base ring so the vase feels grounded and stable."),
+            self._step("step_003", "Soften the mouth with a gentle lip so the form reads as a finished vase."),
         ]
         code = {
-            "step_001": f'''def step_001(state):\n    """{steps[0].description}"""\n    outer = (cq.Workplane("XY")\n        .circle({base_radius:.3f})\n        .workplane(offset={d["height"] * 0.28:.3f}).circle({body_radius * 0.96:.3f})\n        .workplane(offset={d["height"] * 0.30:.3f}).circle({body_radius:.3f})\n        .workplane(offset={d["height"] * 0.24:.3f}).circle({neck_radius:.3f})\n        .workplane(offset={d["height"] * 0.18:.3f}).circle({mouth_radius:.3f})\n        .loft(combine=True))\n    state["solid"] = outer\n    state["parts"] = {{"body": outer.val()}}\n    return state\n''',
-            "step_002": f'''def step_002(state):\n    """{steps[1].description}"""\n    solid = state["solid"].faces(">Z").shell(-{d["wall"]:.3f})\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
-            "step_003": f'''def step_003(state):\n    """{steps[2].description}"""\n    base_ring = (cq.Workplane("XY")\n        .circle({base_radius + 4:.3f})\n        .circle({base_radius - 2:.3f})\n        .extrude(6.0))\n    lip = (cq.Workplane("XY")\n        .transformed(offset=(0, 0, {d["height"] - 4:.3f}))\n        .circle({mouth_radius + 2:.3f})\n        .circle({mouth_radius - d["wall"] * 0.6:.3f})\n        .extrude(4.0))\n    solid = state["solid"].union(base_ring).union(lip)\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
+            "step_001": f'''def step_001(state):\n    """{steps[0].description}"""\n    outer = (cq.Workplane("XY")\n        .circle({base_radius:.3f})\n        .workplane(offset={d["height"] * 0.28:.3f}).circle({body_radius * 0.96:.3f})\n        .workplane(offset={d["height"] * 0.30:.3f}).circle({body_radius:.3f})\n        .workplane(offset={d["height"] * 0.24:.3f}).circle({neck_radius:.3f})\n        .workplane(offset={d["height"] * 0.18:.3f}).circle({mouth_radius:.3f})\n        .loft(combine=True))\n    solid = outer.faces(">Z").shell(-{d["wall"]:.3f})\n    state["solid"] = solid\n    state["parts"] = {{"body": solid.val()}}\n    return state\n''',
+            "step_002": f'''def step_002(state):\n    """{steps[1].description}"""\n    base_ring = (cq.Workplane("XY")\n        .circle({base_radius + 4:.3f})\n        .circle({base_radius - 2:.3f})\n        .extrude(6.0))\n    solid = state["solid"].union(base_ring)\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
+            "step_003": f'''def step_003(state):\n    """{steps[2].description}"""\n    lip = (cq.Workplane("XY")\n        .transformed(offset=(0, 0, {d["height"] - 4:.3f}))\n        .circle({mouth_radius + 2:.3f})\n        .circle({mouth_radius - d["wall"] * 0.6:.3f})\n        .extrude(4.0))\n    solid = state["solid"].union(lip)\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
         }
         return steps, code
 

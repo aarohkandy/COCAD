@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
 
-from app.domain.models import ArtifactLink, CheckerReport, DesignSpec, MassProperties, RenderView
+from app.domain.models import ArtifactLink, DesignSpec, MassProperties, RenderView
 
 
 @dataclass
@@ -22,8 +22,10 @@ class RevisionArtifacts:
     model_url: str
     downloads: list[ArtifactLink]
     render_views: list[RenderView]
+    render_files: dict[str, Path]
     mass_properties: MassProperties
-    checker_report: CheckerReport
+    interference_relevant: bool
+    interference_detected: bool
 
 
 class CadService:
@@ -88,7 +90,8 @@ class CadService:
             title=spec.label,
         )
         mass_properties = self._mass_properties(shape)
-        checker_report = self._checker_report(state, mass_properties)
+        parts = state.get("parts", {})
+        interference_relevant = len(parts) > 1
 
         return RevisionArtifacts(
             revision_label=revision_label,
@@ -99,8 +102,10 @@ class CadService:
                 ArtifactLink(label="Download STEP", url=self._url_for(api_root, relative_dir / f"{step_id}.step")),
             ],
             render_views=render_views,
+            render_files={key: export_dir / f"{key}.png" for key in ("top", "front", "side", "isometric")},
             mass_properties=mass_properties,
-            checker_report=checker_report,
+            interference_relevant=interference_relevant,
+            interference_detected=False,
         )
 
     def _render_views(
@@ -112,7 +117,7 @@ class CadService:
         api_root: str,
         title: str,
     ) -> list[RenderView]:
-        vertices, faces = shape.tessellate(0.5, 0.2)
+        vertices, faces = shape.tessellate(0.2, 0.05)
         points = np.array([[vertex.x, vertex.y, vertex.z] for vertex in vertices])
         triangles = [points[list(face)] for face in faces]
         mins = points.min(axis=0)
@@ -121,7 +126,7 @@ class CadService:
         half_span = float(np.max(np.maximum(maxs - mins, 1.0))) / 2.0
 
         views = [
-            ("top", "Top", 90, -90),
+            ("top", "Top", 68, -90),
             ("front", "Front", 0, -90),
             ("side", "Side", 0, 0),
             ("isometric", "Isometric", 28, 35),
@@ -135,8 +140,8 @@ class CadService:
                 Poly3DCollection(
                     triangles,
                     facecolor="#c98a4b",
-                    edgecolor="#4a3322",
-                    linewidths=0.35,
+                    edgecolor="none",
+                    linewidths=0.0,
                     alpha=0.98,
                 )
             )
@@ -166,20 +171,6 @@ class CadService:
             volume_mm3=round(shape.Volume(), 3),
             center_of_mass_mm=(round(center.x, 3), round(center.y, 3), round(center.z, 3)),
             bounding_box_mm=(round(bbox.xlen, 3), round(bbox.ylen, 3), round(bbox.zlen, 3)),
-        )
-
-    def _checker_report(self, state: dict, mass_properties: MassProperties) -> CheckerReport:
-        parts = state.get("parts", {})
-        interference_relevant = len(parts) > 1
-        notes = [f"Volume {mass_properties.volume_mm3:.1f} mm^3."]
-        if interference_relevant:
-            notes.append("Merged single-solid revision: interference is tracked as not applicable for this accepted step.")
-        return CheckerReport(
-            passed=True,
-            summary="Deterministic checker accepted the revision.",
-            interference_relevant=interference_relevant,
-            interference_detected=False,
-            notes=notes,
         )
 
     @staticmethod

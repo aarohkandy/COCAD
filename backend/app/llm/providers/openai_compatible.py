@@ -18,6 +18,27 @@ class OpenAICompatibleProvider:
             "Content-Type": "application/json",
         }
 
+    async def list_models(self) -> list[str]:
+        timeout = httpx.Timeout(connect=10.0, read=self._timeout, write=30.0, pool=30.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(
+                f"{self._base_url}/models",
+                headers=self._headers,
+            )
+            response.raise_for_status()
+        data = response.json()
+        models = data.get("data")
+        if not isinstance(models, list):
+            return []
+        resolved: list[str] = []
+        for item in models:
+            if not isinstance(item, dict):
+                continue
+            identifier = item.get("id")
+            if isinstance(identifier, str):
+                resolved.append(identifier)
+        return resolved
+
     async def stream_chat(
         self,
         *,
