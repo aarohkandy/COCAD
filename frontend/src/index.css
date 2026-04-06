@@ -159,12 +159,12 @@ a {
 .app-shell {
   display: grid;
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr);
-  gap: 0.8rem;
+  gap: 0.7rem;
   min-height: 100vh;
   width: 100%;
   max-width: none;
   margin: 0 auto;
-  padding: 0.7rem;
+  padding: 0.55rem;
 }
 
 .chat-panel,
@@ -754,19 +754,18 @@ a {
 .viewer-stage {
   position: relative;
   flex: 1;
-  margin: 0.8rem 1.1rem 0;
+  margin: 0.7rem 0.9rem 0;
   border-radius: 1.8rem;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
     radial-gradient(circle at top, rgba(225, 185, 121, 0.12), transparent 26%),
     linear-gradient(180deg, #171d1c, #101514);
-  min-height: 20rem;
+  min-height: 0;
 }
 
 .viewer-canvas {
   width: 100%;
-  min-height: 20rem;
   height: 100%;
 }
 
@@ -787,88 +786,34 @@ a {
 }
 
 .viewer-footer {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.8rem 1.1rem 1.1rem;
-}
-
-.viewer-info-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.viewer-info-card,
-.viewer-gallery {
-  padding: 0.9rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.viewer-info-card h3,
-.viewer-gallery h3 {
-  margin-top: 0.1rem;
-}
-
-.metric-list {
-  display: grid;
-  gap: 0.8rem;
-}
-
-.metric-list div {
-  display: grid;
-  gap: 0.2rem;
-}
-
-.metric-list dt {
-  font-size: 0.74rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(244, 239, 232, 0.52);
-}
-
-.metric-list dd {
-  margin: 0;
-  color: #fff8ef;
-  line-height: 1.5;
-}
-
-.viewer-gallery {
-  display: grid;
-  gap: 0.75rem;
-}
-
-.gallery-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.8rem;
-}
-
-.gallery-card {
-  overflow: hidden;
-  border-radius: 1.2rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: none;
-}
-
-.gallery-card img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-}
-
-.gallery-card figcaption {
-  padding: 0.75rem 0.85rem;
-  font-size: 0.76rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(244, 239, 232, 0.62);
+  padding: 0.75rem 0.9rem 0.9rem;
 }
 
 .download-row {
   gap: 0.8rem;
+}
+
+.viewer-compact-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.viewer-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(244, 239, 232, 0.72);
+  font-size: 0.78rem;
+  font-family: "IBM Plex Mono", monospace;
 }
 
 .download-button {
@@ -914,12 +859,6 @@ a {
   .section-header,
   .card-row {
     flex-direction: column;
-  }
-
-  .insight-grid,
-  .viewer-info-grid,
-  .gallery-grid {
-    grid-template-columns: 1fr;
   }
 
   .chat-hero h1 {

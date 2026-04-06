@@ -40,9 +40,8 @@ export function ModelViewer({
   const sceneRef = useRef<Scene | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const modelRef = useRef<Group | null>(null);
-  const initializedCameraRef = useRef(false);
   const [status, setStatus] = useState("Waiting for accepted revision");
-  const hasDiagnostics = Boolean(modelUrl || massProperties || checkerReport || renderViews.length > 0 || downloads.length > 0);
+  const hasDiagnostics = Boolean(downloads.length > 0);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -142,18 +141,7 @@ export function ModelViewer({
 
         modelRef.current = gltf.scene;
         sceneRef.current.add(gltf.scene);
-
-        if (!initializedCameraRef.current) {
-          const bounds = new Box3().setFromObject(gltf.scene);
-          const size = bounds.getSize(new Vector3());
-          const center = bounds.getCenter(new Vector3());
-          const distance = Math.max(size.x, size.y, size.z) * 2 || 6;
-
-          cameraRef.current.position.set(center.x + distance, center.y + distance, center.z + distance);
-          controlsRef.current.target.copy(center);
-          controlsRef.current.update();
-          initializedCameraRef.current = true;
-        }
+        fitCameraToObject(gltf.scene, cameraRef.current, controlsRef.current);
         setStatus("Model ready");
       },
       undefined,
@@ -187,89 +175,51 @@ export function ModelViewer({
       </div>
       {hasDiagnostics ? (
         <footer className="viewer-footer">
-          {(massProperties || checkerReport) ? (
-            <section className="viewer-info-grid">
-              {massProperties ? (
-                <article className="viewer-info-card">
-                  <div className="card-row">
-                    <div>
-                      <p className="summary-label">Physics</p>
-                      <h3>Mass properties</h3>
-                    </div>
-                  </div>
-                  <dl className="metric-list">
-                    <div>
-                      <dt>Volume</dt>
-                      <dd>{massProperties.volume_mm3.toFixed(1)} mm3</dd>
-                    </div>
-                    <div>
-                      <dt>Center</dt>
-                      <dd>
-                        {massProperties.center_of_mass_mm.map((value) => value.toFixed(1)).join(", ")} mm
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Bounding box</dt>
-                      <dd>
-                        {massProperties.bounding_box_mm.map((value) => value.toFixed(1)).join(" x ")} mm
-                      </dd>
-                    </div>
-                  </dl>
-                </article>
-              ) : null}
-
-              {checkerReport ? (
-                <article className="viewer-info-card">
-                  <div className="card-row">
-                    <div>
-                      <p className="summary-label">Audit</p>
-                      <h3>Checker notes</h3>
-                    </div>
-                  </div>
-                  <p className={checkerReport.passed ? "status-live" : "status-idle"}>
-                    {checkerReport.summary}
-                  </p>
-                  <ul className="bullet-list bullet-list--compact">
-                    {checkerReport.notes.map((note) => (
-                      <li key={note}>{note}</li>
-                    ))}
-                  </ul>
-                </article>
-              ) : null}
-            </section>
-          ) : null}
-
-          {renderViews.length > 0 ? (
-            <section className="viewer-gallery">
-              <div className="card-row">
-                <div>
-                  <p className="summary-label">Review Frames</p>
-                  <h3>Render gallery</h3>
-                </div>
-                <span className="section-hint">{renderViews.length} views</span>
-              </div>
-              <div className="gallery-grid">
-                {renderViews.map((view) => (
-                  <figure key={view.key} className="gallery-card">
-                    <img src={view.url} alt={view.label} loading="lazy" />
-                    <figcaption>{view.label}</figcaption>
-                  </figure>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {downloads.length > 0 ? (
-            <div className="download-row">
-              {downloads.map((download) => (
-                <a key={download.label} className="download-button" href={download.url} target="_blank" rel="noreferrer">
-                  {download.label}
-                </a>
-              ))}
-            </div>
-          ) : null}
+          <div className="viewer-compact-meta">
+            {massProperties ? (
+              <span className="viewer-meta-chip">
+                {massProperties.bounding_box_mm.map((value) => value.toFixed(0)).join(" x ")} mm
+              </span>
+            ) : null}
+            {checkerReport ? (
+              <span className="viewer-meta-chip">{checkerReport.summary}</span>
+            ) : null}
+            {renderViews.length > 0 ? <span className="viewer-meta-chip">{renderViews.length} renders</span> : null}
+          </div>
+          <div className="download-row">
+            {downloads.map((download) => (
+              <a key={download.label} className="download-button" href={download.url} target="_blank" rel="noreferrer">
+                {download.label}
+              </a>
+            ))}
+          </div>
         </footer>
       ) : null}
     </section>
   );
+}
+
+function fitCameraToObject(object: Group, camera: PerspectiveCamera, controls: OrbitControls) {
+  const bounds = new Box3().setFromObject(object);
+  if (bounds.isEmpty()) {
+    return;
+  }
+
+  const size = bounds.getSize(new Vector3());
+  const center = bounds.getCenter(new Vector3());
+  const maxSize = Math.max(size.x, size.y, size.z) || 1;
+  const fitHeightDistance = maxSize / (2 * Math.tan((camera.fov * Math.PI) / 360));
+  const fitWidthDistance = fitHeightDistance / Math.max(camera.aspect, 0.1);
+  const distance = Math.max(fitHeightDistance, fitWidthDistance) * 1.45;
+  const offset = new Vector3(1, 0.65, 1).normalize().multiplyScalar(distance);
+
+  camera.position.copy(center).add(offset);
+  camera.near = Math.max(distance / 100, 0.1);
+  camera.far = distance * 100;
+  camera.updateProjectionMatrix();
+
+  controls.target.copy(center);
+  controls.minDistance = Math.max(maxSize * 0.45, 0.1);
+  controls.maxDistance = Math.max(distance * 6, 10);
+  controls.update();
 }

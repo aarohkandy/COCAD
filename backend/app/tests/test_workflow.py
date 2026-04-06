@@ -120,6 +120,22 @@ def test_vase_brief_preserves_object_kind_and_height(tmp_path: Path) -> None:
     assert all(step["status"] == "accepted" for step in completed["workflow"]["step_plan"])
 
 
+def test_cup_brief_defaults_to_cup_geometry_instead_of_block_object(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings=_settings(tmp_path)))
+    session_id = _create_session(client)
+
+    response = client.post(
+        f"/api/sessions/{session_id}/messages",
+        json={"message": "can you make me a cup"},
+    )
+    assert response.status_code == 200
+    snapshot = _wait_for_stage(client, session_id, "awaiting_confirmation")
+
+    assert snapshot["workflow"]["design_kind"] == "cup"
+    assert "cup" in snapshot["workflow"]["pending_assumptions"]["intent_summary"].lower()
+    assert all("plain box" not in assumption.lower() for assumption in snapshot["workflow"]["pending_assumptions"]["assumptions"])
+
+
 def test_safety_refusal_blocks_workflow(tmp_path: Path) -> None:
     client = TestClient(create_app(settings=_settings(tmp_path)))
     session_id = _create_session(client)

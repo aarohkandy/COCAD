@@ -45,12 +45,15 @@ class DesignEngine:
     def needs_clarification(self, spec: DesignSpec, interview_rounds: int) -> bool:
         if interview_rounds > 0:
             return False
+        if spec.kind == "cup":
+            return False
         if spec.kind == "block_object":
             return True
         return int(spec.options.get("specified_dimensions_count", 0)) == 0
 
     def interview_question(self, spec: DesignSpec) -> str:
         prompts = {
+            "cup": "Should this be a plain drinking cup or a handled mug, and do you want it closer to espresso size or a normal cup?",
             "hanging_planter": "What overall diameter and height should the hanging planter use, and do you want drainage holes?",
             "planter": "What overall diameter and height should the planter use, and do you want drainage holes?",
             "vase": "What height and overall body width should the vase use, and do you want a narrow neck or a wider mouth?",
@@ -64,7 +67,13 @@ class DesignEngine:
     def build_assumptions(self, spec: DesignSpec) -> AssumptionBundle:
         dims = spec.dimensions_mm
         assumptions: list[str]
-        if spec.kind in {"hanging_planter", "planter"}:
+        if spec.kind == "cup":
+            assumptions = [
+                f"Use a drinking cup about {dims['height']:.0f} mm tall with an opening around {dims['diameter']:.0f} mm wide.",
+                f"Keep it as one hollow solid with an open top, about {dims['wall']:.0f} mm walls, and a stable base around {dims['base_diameter']:.0f} mm wide.",
+                "Keep it handle-free so it reads as a plain cup." if not spec.options.get("has_handle") else "Add an integrated side handle so it reads as a mug.",
+            ]
+        elif spec.kind in {"hanging_planter", "planter"}:
             assumptions = [
                 f"Use a cylindrical planter body about {dims['diameter']:.0f} mm in diameter and {dims['height']:.0f} mm tall.",
                 "Use a 5 mm wall thickness and a single printable solid.",
@@ -110,6 +119,7 @@ class DesignEngine:
 
     def generate_plan(self, spec: DesignSpec) -> tuple[list[StepPlanItem], dict[str, str]]:
         generators = {
+            "cup": self._plan_cup,
             "hanging_planter": self._plan_hanging_planter,
             "planter": self._plan_planter,
             "vase": self._plan_vase,
@@ -143,6 +153,8 @@ class DesignEngine:
         )
 
     def _detect_kind(self, text: str) -> str:
+        if any(keyword in text for keyword in ("mug", "cup", "tumbler", "drinking glass")):
+            return "cup"
         if any(keyword in text for keyword in ("planter", "flower pot", "pot")) and "hang" in text:
             return "hanging_planter"
         if any(keyword in text for keyword in ("planter", "flower pot", "pot")):
@@ -159,6 +171,7 @@ class DesignEngine:
 
     def _label_for_kind(self, kind: str) -> str:
         return {
+            "cup": "Cup",
             "hanging_planter": "Hanging Planter",
             "planter": "Planter",
             "vase": "Vase",
@@ -170,6 +183,7 @@ class DesignEngine:
 
     def _default_dimensions(self, kind: str) -> dict[str, float]:
         return {
+            "cup": {"diameter": 82.0, "height": 95.0, "wall": 3.5, "base_diameter": 58.0, "lip_diameter": 86.0, "handle_span": 32.0},
             "hanging_planter": {"diameter": 200.0, "height": 160.0, "wall": 5.0},
             "planter": {"diameter": 180.0, "height": 150.0, "wall": 5.0},
             "vase": {"diameter": 96.0, "height": 180.0, "wall": 4.0, "neck_diameter": 58.0, "mouth_diameter": 74.0, "base_diameter": 82.0},
@@ -181,6 +195,8 @@ class DesignEngine:
 
     def _default_options(self, kind: str, text: str) -> dict[str, Any]:
         options: dict[str, Any] = {}
+        if kind == "cup":
+            options["has_handle"] = "mug" in text or "handle" in text
         if kind in {"planter", "hanging_planter"}:
             options["drainage_holes"] = "no drainage" not in text and "without drainage" not in text
         if kind == "vase":
@@ -218,7 +234,7 @@ class DesignEngine:
         return {"values": values, "surface_units": surface_units}
 
     def _dimension_key_from_context(self, kind: str, context: str) -> str | None:
-        rotational = kind in {"hanging_planter", "planter", "vase"}
+        rotational = kind in {"cup", "hanging_planter", "planter", "vase"}
 
         if any(token in context for token in ("tall", "height", "high")):
             return "height"
@@ -242,6 +258,8 @@ class DesignEngine:
     def _fallback_dimension_order(kind: str) -> tuple[str, ...]:
         if kind in {"hanging_planter", "planter"}:
             return ("diameter", "height", "wall")
+        if kind == "cup":
+            return ("height", "diameter", "base_diameter")
         if kind == "vase":
             return ("height", "diameter", "mouth_diameter")
         if kind == "hook":
@@ -270,6 +288,31 @@ class DesignEngine:
             "step_003": f'''def step_003(state):\n    """{steps[2].description}"""\n    solid = state["solid"]\n    lug_shapes = []\n    for angle in (0, 120, 240):\n        radians = math.radians(angle)\n        x = math.cos(radians) * ({d["diameter"]/2 - 9:.3f})\n        y = math.sin(radians) * ({d["diameter"]/2 - 9:.3f})\n        lug = cq.Workplane("XY").transformed(offset=(x, y, {d["height"] - 18:.3f})).box(26.0, 12.0, 18.0, centered=(True, True, False)).val()\n        lug_shapes.append(lug)\n        solid = solid.union(cq.Workplane(obj=lug))\n    state["solid"] = solid\n    state["parts"]["lugs"] = cq.Compound.makeCompound(lug_shapes)\n    return state\n''',
             "step_004": f'''def step_004(state):\n    """{steps[3].description}"""\n    outer_band = cq.Workplane("XY").transformed(offset=(0, 0, {d["height"] - 8:.3f})).circle({d["diameter"]/2 + 4:.3f}).extrude(8.0)\n    inner_band = cq.Workplane("XY").transformed(offset=(0, 0, {d["height"] - 8:.3f})).circle({d["diameter"]/2 - d["wall"]:.3f}).extrude(8.0)\n    rim_band = outer_band.cut(inner_band)\n    solid = state["solid"].union(rim_band)\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
         }
+        return steps, code
+
+    def _plan_cup(self, spec: DesignSpec) -> tuple[list[StepPlanItem], dict[str, str]]:
+        d = spec.dimensions_mm
+        body_radius = d["diameter"] / 2
+        base_radius = d["base_diameter"] / 2
+        lip_radius = d["lip_diameter"] / 2
+        has_handle = bool(spec.options.get("has_handle"))
+
+        steps = [
+            self._step("step_001", f"Create the outer cup silhouette, about {d['height']:.0f} mm tall with an opening around {d['diameter']:.0f} mm wide."),
+            self._step("step_002", "Hollow the cup from the top so it becomes an open drinking vessel with consistent walls."),
+            self._step("step_003", "Add a subtle lip ring and stable base so the cup reads as finished tableware."),
+        ]
+        code = {
+            "step_001": f'''def step_001(state):\n    """{steps[0].description}"""\n    outer = (cq.Workplane("XY")\n        .circle({base_radius:.3f})\n        .workplane(offset={d["height"] * 0.58:.3f}).circle({body_radius * 0.96:.3f})\n        .workplane(offset={d["height"] * 0.42:.3f}).circle({lip_radius:.3f})\n        .loft(combine=True))\n    state["solid"] = outer\n    state["parts"] = {{"body": outer.val()}}\n    return state\n''',
+            "step_002": f'''def step_002(state):\n    """{steps[1].description}"""\n    solid = state["solid"].faces(">Z").shell(-{d["wall"]:.3f})\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
+            "step_003": f'''def step_003(state):\n    """{steps[2].description}"""\n    base_ring = (cq.Workplane("XY")\n        .circle({base_radius + 2.5:.3f})\n        .circle({max(base_radius - 3.0, 4.0):.3f})\n        .extrude(4.0))\n    lip = (cq.Workplane("XY")\n        .transformed(offset=(0, 0, {d["height"] - 3:.3f}))\n        .circle({lip_radius + 1.5:.3f})\n        .circle({max(lip_radius - d["wall"] * 0.45, 4.0):.3f})\n        .extrude(3.0))\n    solid = state["solid"].union(base_ring).union(lip)\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n''',
+        }
+
+        if has_handle:
+            handle_step = self._step("step_004", "Add an integrated side handle so the cup reads as a mug.")
+            steps.append(handle_step)
+            code["step_004"] = f'''def step_004(state):\n    """{handle_step.description}"""\n    handle = (cq.Workplane("YZ")\n        .center({d["diameter"]/2 + d["handle_span"] * 0.35:.3f}, {d["height"] * 0.52:.3f})\n        .rect(18.0, {d["handle_span"]:.3f})\n        .offset2D(6.0)\n        .extrude(8.0, both=True))\n    solid = state["solid"].union(handle)\n    state["solid"] = solid\n    state["parts"]["body"] = solid.val()\n    return state\n'''
+
         return steps, code
 
     def _plan_planter(self, spec: DesignSpec) -> tuple[list[StepPlanItem], dict[str, str]]:
