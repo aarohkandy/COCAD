@@ -182,15 +182,17 @@ function applyServerEvent(state: AppState, event: StreamEvent): AppState {
           step_plan: updateStepStatus(state.workflow.step_plan, readStep(event.data.step)?.step_id, "failed"),
           checker_report: {
             passed: false,
-            summary: String(event.data.reason ?? "Checker rejected the revision."),
+            summary: String(event.data.summary ?? "Checker rejected the revision."),
             interference_relevant: false,
             interference_detected: false,
-            notes: [String(event.data.reason ?? "Checker rejected the revision.")],
+            notes: Array.isArray(event.data.notes)
+              ? event.data.notes.map((item) => String(item))
+              : [String(event.data.summary ?? "Checker rejected the revision.")],
           },
-          latest_summary: String(event.data.reason ?? "Checker rejected the revision."),
+          latest_summary: String(event.data.summary ?? "Checker rejected the revision."),
           stage: "blocked",
         },
-        noteCard(event, String(event.data.reason ?? "Checker rejected the revision."), "warning"),
+        noteCard(event, String(event.data.summary ?? "Checker rejected the revision."), "warning"),
       );
     case "step_accepted": {
       const step = readStep(event.data.step);

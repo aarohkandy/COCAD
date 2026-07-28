@@ -126,7 +126,7 @@ async def stream_session_events(session_id: str, request: Request) -> StreamingR
 async def get_artifact(artifact_path: str, request: Request) -> FileResponse:
     artifact_root: Path = request.app.state.settings.artifact_dir.resolve()
     candidate = (artifact_root / artifact_path).resolve()
-    if not str(candidate).startswith(str(artifact_root)) or not candidate.exists():
+    if not (candidate == artifact_root or artifact_root in candidate.parents) or not candidate.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found.")
     return FileResponse(candidate)
 
